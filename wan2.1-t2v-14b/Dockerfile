@@ -28,8 +28,8 @@ RUN pip install wheel packaging torch==2.6
 WORKDIR /workspace
 RUN git clone https://github.com/Wan-Video/Wan2.1.git
 
-# Modify the Gradio script to use port 80
-RUN sed -i 's/server_port=7860/server_port=80/' /workspace/Wan2.1/gradio/t2i_14B_singleGPU.py
+# Modify the Gradio script to use port 8080
+RUN sed -i 's/server_port=7860/server_port=8080/' /workspace/Wan2.1/gradio/t2i_14B_singleGPU.py
 
 # Install all Python dependencies at once
 RUN pip install -r /workspace/Wan2.1/requirements.txt && \
@@ -38,8 +38,8 @@ RUN pip install -r /workspace/Wan2.1/requirements.txt && \
 # Final dependency check (if needed)
 RUN pip install --no-cache-dir packaging torch==2.6 flash_attn -r /workspace/Wan2.1/requirements.txt
 
-# Expose only port 80 for the Gradio server
-EXPOSE 80
+# Expose only port 8080 for the Gradio server
+EXPOSE 8080
 
 #Set CentML User
 ARG USERNAME="centml"
