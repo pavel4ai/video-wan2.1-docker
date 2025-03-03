@@ -29,9 +29,12 @@ WORKDIR /workspace
 RUN echo "=== Cloning Wan2.1 repository ===" && \
     git clone https://github.com/Wan-Video/Wan2.1.git
 
-# Modify the Gradio script to use port 8080
+# Commenting out the sed command as requested
 RUN echo "=== Modifying Gradio script to use port 8080 ===" && \
-    sed -i 's/server_port=7860/server_port=8080/' /workspace/Wan2.1/gradio/t2i_14B_singleGPU.py
+     sed -i 's/server_port=7860/server_port=8080/' /workspace/Wan2.1/gradio/t2i_14B_singleGPU.py
+
+# Copy the updated Gradio script
+#COPY t2v_14B_singleGPU.py /workspace/Wan2.1/gradio/t2v_14B_singleGPU.py
 
 # Install all Python dependencies at once
 RUN echo "=== Installing Python dependencies ===" && \
