@@ -26,34 +26,42 @@ RUN pip install wheel packaging torch==2.6
 
 # Clone the repository
 WORKDIR /workspace
-RUN git clone https://github.com/Wan-Video/Wan2.1.git
+RUN echo "=== Cloning Wan2.1 repository ===" && \
+    git clone https://github.com/Wan-Video/Wan2.1.git
 
 # Modify the Gradio script to use port 8080
-RUN sed -i 's/server_port=7860/server_port=8080/' /workspace/Wan2.1/gradio/t2i_14B_singleGPU.py
+RUN echo "=== Modifying Gradio script to use port 8080 ===" && \
+    sed -i 's/server_port=7860/server_port=8080/' /workspace/Wan2.1/gradio/t2i_14B_singleGPU.py
 
 # Install all Python dependencies at once
-RUN pip install -r /workspace/Wan2.1/requirements.txt && \
+RUN echo "=== Installing Python dependencies ===" && \
+    pip install -r /workspace/Wan2.1/requirements.txt && \
     pip install "huggingface_hub[cli]"
 
 # Final dependency check (if needed)
-RUN pip install --no-cache-dir packaging torch==2.6 flash_attn -r /workspace/Wan2.1/requirements.txt
+RUN echo "=== Performing final dependency check ===" && \
+    pip install --no-cache-dir packaging torch==2.6 flash_attn -r /workspace/Wan2.1/requirements.txt
 
 # Expose only port 8080 for the Gradio server
 EXPOSE 8080
 
 #Set CentML User
 ARG USERNAME="centml"
-RUN useradd -u 1024 -m -d /workspace -s /bin/bash ${USERNAME} && chown -R ${USERNAME}:${USERNAME} /workspace
+RUN echo "=== Setting up CentML user ===" && \
+    useradd -u 1024 -m -d /workspace -s /bin/bash ${USERNAME} && \
+    chown -R ${USERNAME}:${USERNAME} /workspace
 USER 1024
 
 # Clone the script from the specified GitHub repository
-RUN git clone https://github.com/pavel4ai/video-wan2.1-docker.git /workspace/temp && \
+RUN echo "=== Cloning download and verify weights script ===" && \
+    git clone https://github.com/pavel4ai/video-wan2.1-docker.git /workspace/temp && \
     cp /workspace/temp/wan2.1-t2v-14b/download_and_verify_weights.sh /workspace/download_and_verify_weights.sh && \
     rm -rf /workspace/temp
 
 # Make the script executable
-RUN chmod +x /workspace/download_and_verify_weights.sh
+RUN echo "=== Making the download script executable ===" && \
+    chmod +x /workspace/download_and_verify_weights.sh
 
 # Set the script as the entry point
 ENTRYPOINT ["/workspace/download_and_verify_weights.sh"]
-CMD ["python", "/workspace/Wan2.1/gradio/t2i_14B_singleGPU.py", "--ckpt_dir", "/workspace/Wan2.1/Wan2.1-T2V-14B"]
+CMD ["python", "/workspace/Wan2.1/gradio/t2v_14B_singleGPU.py", "--ckpt_dir", "/workspace/Wan2.1/Wan2.1-T2V-14B"]
