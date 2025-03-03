@@ -66,7 +66,7 @@ RUN mkdir -p /var/log/nginx /var/lib/nginx/body /run/nginx && \
     chown -R 1024:1024 /var/log/nginx /var/lib/nginx /var/lib/nginx/body /run/nginx
 
 # Expose necessary ports
-EXPOSE 7860 9090 8081 5201
+EXPOSE 7860 9090 8081 5201 22
 
 # Default command: Drop to shell (User manually starts tests)
 CMD ["/bin/bash"]

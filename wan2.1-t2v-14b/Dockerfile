@@ -32,19 +32,20 @@ RUN git clone https://github.com/Wan-Video/Wan2.1.git
 RUN pip install -r /workspace/Wan2.1/requirements.txt && \
     pip install "huggingface_hub[cli]"
 
-# Download the Hugging Face model weights
-#RUN huggingface-cli download Wan-AI/Wan2.1-T2V-14B --local-dir /workspace/Wan2.1/Wan2.1-T2V-14B
-
 # Final dependency check (if needed)
 RUN pip install --no-cache-dir packaging torch==2.6 flash_attn -r /workspace/Wan2.1/requirements.txt
 
 # Expose the Gradio server port
 EXPOSE 7860
-
+EXPOSE 22
 #Set CentML User
 ARG USERNAME="centml"
 RUN useradd -u 1024 -m -d /workspace -s /bin/bash ${USERNAME} && chown -R ${USERNAME}:${USERNAME} /workspace
 USER 1024
 
+# Download the Hugging Face model weights
+# RUN huggingface-cli download Wan-AI/Wan2.1-T2V-14B --local-dir /workspace/Wan2.1/Wan2.1-T2V-14B
 # Default command to start the model
-#CMD ["python", "/workspace/Wan2.1/gradio/t2v_14B_singleGPU.py", "--ckpt_dir", "/workspace/Wan2.1/Wan2.1-T2V-14B"]
+# CMD ["python", "/workspace/Wan2.1/gradio/t2v_14B_singleGPU.py", "--ckpt_dir", "/workspace/Wan2.1/Wan2.1-T2V-14B"]
+# Default command: Drop to shell (User manually starts tests)
+CMD ["/bin/bash"]

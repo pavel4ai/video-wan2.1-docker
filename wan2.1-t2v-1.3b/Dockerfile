@@ -45,6 +45,6 @@ RUN pip install -r /workspace/Wan2.1/requirements.txt
 
 # Expose the Gradio server port
 EXPOSE 7860
-
+EXPOSE 22
 # Default command to start the model
 CMD ["python", "/workspace/Wan2.1/gradio/t2v_1.3B_singleGPU.py", "--ckpt_dir", "/workspace/Wan2.1/Wan2.1-T2V-1.3B"]
