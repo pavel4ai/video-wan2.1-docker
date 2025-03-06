@@ -31,7 +31,7 @@ RUN echo "=== Cloning Wan2.1 repository ===" && \
 
 # Commenting out the sed command as requested
 RUN echo "=== Modifying Gradio script to use port 8080 ===" && \
-     sed -i 's/server_port=7860/server_port=8080/' /workspace/Wan2.1/gradio/t2i_14B_singleGPU.py
+     sed -i 's/server_port=7860/server_port=8080/' /workspace/Wan2.1/gradio/t2v_14B_singleGPU.py
 
 # Copy the updated Gradio script
 #COPY t2v_14B_singleGPU.py /workspace/Wan2.1/gradio/t2v_14B_singleGPU.py
