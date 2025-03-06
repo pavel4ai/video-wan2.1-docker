@@ -68,13 +68,10 @@ RUN pip install -r /workspace/Wan2.1/requirements.txt && \
 ARG USERNAME="centml"
 RUN useradd -u 1024 -m -d /workspace -s /bin/bash ${USERNAME} && \
     chown -R ${USERNAME}:${USERNAME} /workspace
-
-# Create directories for monitoring data
 RUN mkdir -p /workspace/data/metrics /workspace/data/logs /workspace/data/fio && \
     chown -R ${USERNAME}:${USERNAME} /workspace/data
-
 USER 1024
-
+# Create directories for monitoring data
 # Expose single port for all services
 EXPOSE 8080
 
