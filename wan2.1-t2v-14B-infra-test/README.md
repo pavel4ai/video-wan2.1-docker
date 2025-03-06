@@ -39,17 +39,23 @@ The system will generate 5 videos using these prompts:
 
 ## Usage
 
-1. Build the Docker image:
+1. Clone the repository:
+```bash
+git clone https://github.com/pavel4ai/video-wan2.1-docker.git
+cd video-wan2.1-docker/wan2.1-t2v-14B-infra-test
+```
+
+2. Build the Docker image:
 ```bash
 docker build -t wan2.1-infra-test .
 ```
 
-2. Run the container:
+3. Run the container:
 ```bash
 docker run --gpus all -it --rm -p 8080:8080 wan2.1-infra-test
 ```
 
-3. Access the control panel:
+4. Access the control panel:
 ```
 http://localhost:8080
 ```
