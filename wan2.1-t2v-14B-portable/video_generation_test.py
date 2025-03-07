@@ -28,6 +28,7 @@ PROMPTS = [
     "A dramatic ocean storm with massive waves and lightning, realistic style",
     "A peaceful garden with butterflies and blooming flowers, dreamy style",
     "A desert oasis under a starry night sky with shooting stars, artistic style"
+    "A leasurely tropical island white sand shore with realistic palms swaying over blue turquoise waters, realistic style"
 ]
 
 def verify_environment():
@@ -97,32 +98,48 @@ def run_video_generation(prompt, test_number):
         )
         
         # Monitor process output
+        success_indicators = ["Completed", "100%"]  # Keywords indicating success
+        has_error = False
+        
         while True:
             output = process.stdout.readline()
             if output == '' and process.poll() is not None:
                 break
             if output:
-                logger.info(output.strip())
+                # Don't log progress bars as errors
+                if any(indicator in output for indicator in success_indicators):
+                    logger.info(output.strip())
+                elif "%" in output:  # Progress bar
+                    print(output.strip(), end='\r')  # Print progress without logging
+                else:
+                    logger.info(output.strip())
         
-        # Check for errors
+        # Check for actual errors in stderr
         stderr = process.stderr.read()
         if stderr:
-            logger.error(f"Error in test {test_number}:")
-            for line in stderr.split('\n'):
-                if line.strip():
-                    logger.error(f"  {line.strip()}")
-            return False
+            # Filter out progress bar and CUDA messages
+            error_lines = [line.strip() for line in stderr.split('\n') 
+                         if line.strip() and 
+                         not any(x in line for x in ['%|', 'CUDA', 'device'])]
+            
+            if error_lines:
+                logger.error(f"Error in test {test_number}:")
+                for line in error_lines:
+                    logger.error(f"  {line}")
+                has_error = True
         
         # Wait for process to complete
         return_code = process.wait()
         duration = time.time() - start_time
         
-        if return_code == 0:
+        success = return_code == 0 and not has_error
+        if success:
             logger.info(f"Test {test_number} completed successfully")
             logger.info(f"Generation time: {duration:.2f} seconds")
             return True
         else:
-            logger.error(f"Test {test_number} failed with return code {return_code}")
+            if return_code != 0:
+                logger.error(f"Test {test_number} failed with return code {return_code}")
             return False
     
     except Exception as e:
