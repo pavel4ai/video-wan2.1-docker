@@ -1,34 +1,25 @@
-import subprocess
-import time
-import json
-import logging
+#!/usr/bin/env python3
 import os
-import glob
-import shutil
-from prometheus_client import Gauge, start_http_server
-from error_handler import ErrorHandler
+import sys
+import time
+import logging
+import subprocess
+from datetime import datetime
 
-# Configure logging
+# Set up log directory in the workspace
+LOG_DIR = "/home/centml/workspace/data/logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Configure logging with more detailed format
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(levelname)s - [%(name)s] %(message)s',
     handlers=[
-        logging.FileHandler('/home/centml/workspace/data/logs/video_generation.log'),
-        logging.StreamHandler()
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(os.path.join(LOG_DIR, f'video_generation_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'))
     ]
 )
-
-# Prometheus metrics
-iterations_per_second = Gauge('video_generation_iterations_per_second', 'Iterations per second for video generation')
-current_test_number = Gauge('current_test_number', 'Current test number being processed')
-total_tests = Gauge('total_tests', 'Total number of tests to run')
-gpu_memory_usage = Gauge('gpu_memory_usage_mb', 'GPU memory usage in MB')
-video_generation_duration = Gauge('video_generation_duration_seconds', 'Time taken to generate video')
-
-# Constants
-VIDEO_OUTPUT_DIR = '/home/centml/workspace/data/videos'
-WAN_OUTPUT_DIR = '/home/centml/workspace/Wan2.1'
-os.makedirs(VIDEO_OUTPUT_DIR, exist_ok=True)
+logger = logging.getLogger(__name__)
 
 # Test prompts
 PROMPTS = [
@@ -39,51 +30,49 @@ PROMPTS = [
     "A desert oasis under a starry night sky with shooting stars, artistic style"
 ]
 
-def parse_output_metrics(output_line):
-    """Parse metrics from model output"""
-    try:
-        if "it/s" in output_line:
-            speed = float(output_line.split("it/s")[0].split()[-1])
-            iterations_per_second.set(speed)
-            logging.debug(f"Current speed: {speed} it/s")
-    except ValueError as e:
-        logging.warning(f"Failed to parse metrics from line: {output_line}, error: {e}")
-
-def move_latest_video(test_number):
-    """Find and move the latest generated video to the proper location"""
-    try:
-        # Find the latest t2v-*.mp4 file
-        video_files = glob.glob(os.path.join(WAN_OUTPUT_DIR, 't2v-*.mp4'))
-        if not video_files:
-            logging.error("No video file found after generation")
-            return None
+def verify_environment():
+    """Verify that the environment is properly set up"""
+    # Check virtual environment
+    venv_path = "/home/centml/workspace/venv"
+    if not os.path.exists(os.path.join(venv_path, "bin", "activate")):
+        logger.error(f"Virtual environment not found at: {venv_path}")
+        logger.error("Please run setup_environment.sh first")
+        return False
         
-        # Get the most recent file
-        latest_video = max(video_files, key=os.path.getctime)
-        logging.info(f"Found video file: {latest_video}")
-        
-        # Create new filename
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        new_filename = f"test_{test_number}_{timestamp}.mp4"
-        new_path = os.path.join(VIDEO_OUTPUT_DIR, new_filename)
-        
-        # Move the file
-        shutil.move(latest_video, new_path)
-        logging.info(f"Video moved to: {new_path}")
-        
-        # Get file size
-        file_size = os.path.getsize(new_path) / (1024 * 1024)  # Convert to MB
-        logging.info(f"Video size: {file_size:.2f} MB")
-        
-        return new_path
-    except Exception as e:
-        logging.error(f"Failed to move video file: {e}")
-        return None
+    # Check if VIRTUAL_ENV is set
+    if not os.getenv("VIRTUAL_ENV"):
+        logger.error("Virtual environment is not activated")
+        logger.error("Please run: source /home/centml/workspace/venv/bin/activate")
+        return False
+    
+    # Check required paths
+    required_paths = {
+        "generate.py": "/home/centml/workspace/Wan2.1/generate.py",
+        "model weights": "/home/centml/workspace/Wan2.1/Wan2.1-T2V-14B",
+        "logs directory": LOG_DIR
+    }
+    
+    success = True
+    for name, path in required_paths.items():
+        if not os.path.exists(path):
+            logger.error(f"Required {name} not found at: {path}")
+            success = False
+    
+    if not success:
+        logger.error("Please ensure all required files are in place before running tests")
+        return False
+    
+    # Log environment info
+    logger.info("Environment verification successful")
+    logger.info(f"Python version: {sys.version.split()[0]}")
+    logger.info(f"Virtual env: {os.getenv('VIRTUAL_ENV')}")
+    logger.info(f"Log directory: {LOG_DIR}")
+    return True
 
 def run_video_generation(prompt, test_number):
     """Run video generation with the given prompt"""
-    logging.info(f"Starting video generation for test {test_number}/5")
-    logging.info(f"Prompt: {prompt}")
+    logger.info(f"\nTest {test_number}/{len(PROMPTS)}")
+    logger.info(f"Prompt: {prompt}")
     
     cmd = [
         "python",
@@ -96,12 +85,15 @@ def run_video_generation(prompt, test_number):
     
     start_time = time.time()
     try:
+        # Log the exact command being run
+        logger.debug(f"Running command: {' '.join(cmd)}")
+        
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
-            bufsize=1  # Line buffered
+            bufsize=1
         )
         
         # Monitor process output
@@ -110,97 +102,84 @@ def run_video_generation(prompt, test_number):
             if output == '' and process.poll() is not None:
                 break
             if output:
-                parse_output_metrics(output)
-                logging.info(output.strip())
+                logger.info(output.strip())
         
         # Check for errors
         stderr = process.stderr.read()
         if stderr:
-            logging.error(f"Error in test {test_number}: {stderr}")
-            ErrorHandler.handle_error('process_error', stderr)
-            return 1
+            logger.error(f"Error in test {test_number}:")
+            for line in stderr.split('\n'):
+                if line.strip():
+                    logger.error(f"  {line.strip()}")
+            return False
         
         # Wait for process to complete
         return_code = process.wait()
-        end_time = time.time()
-        duration = end_time - start_time
-        video_generation_duration.set(duration)
+        duration = time.time() - start_time
         
         if return_code == 0:
-            logging.info(f"Successfully completed video generation for test {test_number}")
-            logging.info(f"Generation time: {duration:.2f} seconds")
-            
-            # Move and rename the video file
-            video_path = move_latest_video(test_number)
-            if video_path:
-                logging.info(f"Video available at: {video_path}")
-            else:
-                return 1
+            logger.info(f"Test {test_number} completed successfully")
+            logger.info(f"Generation time: {duration:.2f} seconds")
+            return True
         else:
-            logging.error(f"Video generation failed for test {test_number} with return code {return_code}")
-        
-        return return_code
+            logger.error(f"Test {test_number} failed with return code {return_code}")
+            return False
     
     except Exception as e:
-        logging.error(f"Exception in test {test_number}: {str(e)}")
-        ErrorHandler.handle_error('runtime_error', str(e))
-        return 1
+        logger.error(f"Exception in test {test_number}:", exc_info=True)
+        return False
 
-def save_test_results(results):
-    """Save test results to JSON file"""
-    try:
-        results_file = '/home/centml/workspace/data/logs/test_results.json'
-        with open(results_file, 'w') as f:
-            json.dump(results, f, indent=2)
-        logging.info(f"Test results saved to: {results_file}")
-    except Exception as e:
-        logging.error(f"Failed to save test results: {e}")
-        ErrorHandler.handle_error('file_error', f"Failed to save test results: {e}")
-
-def run_test_sequence():
+def main():
     """Run the full test sequence"""
-    results = []
-    total_tests.set(len(PROMPTS))
-    current_test_number.set(0)
+    logger.info("=== Starting Video Generation Test Suite ===")
     
-    logging.info("Starting video generation test suite")
-    logging.info(f"Total tests to run: {len(PROMPTS)}")
+    if not verify_environment():
+        return
     
-    for i, prompt in enumerate(PROMPTS, 1):
-        current_test_number.set(i)
+    logger.info(f"Total tests to run: {len(PROMPTS)}")
+    
+    total_start_time = time.time()
+    success_count = 0
+    durations = []
+    
+    try:
+        for i, prompt in enumerate(PROMPTS, 1):
+            test_start_time = time.time()
+            if run_video_generation(prompt, i):
+                success_count += 1
+                durations.append(time.time() - test_start_time)
+            
+            # Wait between tests for GPU cooldown
+            if i < len(PROMPTS):
+                cooldown = 30
+                logger.info(f"Cooling down for {cooldown} seconds...")
+                time.sleep(cooldown)
+    
+    except KeyboardInterrupt:
+        logger.warning("\nTest suite interrupted by user")
+        raise
+    
+    except Exception:
+        logger.error("Unexpected error during test execution:", exc_info=True)
+        raise
+    
+    finally:
+        # Always show summary, even if interrupted
+        total_duration = time.time() - total_start_time
         
-        start_time = time.time()
-        exit_code = run_video_generation(prompt, i)
-        end_time = time.time()
-        
-        result = {
-            "test_number": i,
-            "prompt": prompt,
-            "duration": end_time - start_time,
-            "success": exit_code == 0,
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-        }
-        results.append(result)
-        save_test_results(results)
-        
-        if exit_code != 0:
-            logging.warning(f"Test {i} failed, but continuing with next test")
-        
-        # Wait between tests to ensure GPU cooldown and resource cleanup
-        if i < len(PROMPTS):
-            cooldown_time = 30
-            logging.info(f"Waiting {cooldown_time} seconds before starting test {i + 1}")
-            time.sleep(cooldown_time)
+        logger.info("\n=== Test Suite Summary ===")
+        logger.info(f"Tests completed: {success_count}/{len(PROMPTS)}")
+        logger.info(f"Total time: {total_duration:.2f} seconds")
+        if durations:
+            logger.info(f"Average time per successful video: {sum(durations)/len(durations):.2f} seconds")
+            logger.info(f"Fastest generation: {min(durations):.2f} seconds")
+            logger.info(f"Slowest generation: {max(durations):.2f} seconds")
+        logger.info("=== End of Test Suite ===\n")
 
 if __name__ == "__main__":
     try:
-        # Start Prometheus metrics server
-        start_http_server(8082)
-        logging.info("Started metrics server on port 8082")
-        
-        # Run the test sequence
-        run_test_sequence()
-        logging.info("Test suite completed")
-    except Exception as e:
-        logging.critical(f"Fatal error in test suite: {str(e)}")
-        ErrorHandler.handle_error('fatal_error', str(e), fatal=True)
+        main()
+    except KeyboardInterrupt:
+        sys.exit(1)
+    except Exception:
+        sys.exit(1)
