@@ -21,10 +21,14 @@ RUN apt update && apt upgrade -y && \
 ENV PATH="/usr/local/cuda/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 
-# Install Node.js for the router and web control panel
+# Install Node.js and dependencies
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -g pm2 express socket.io
+    apt-get update && apt-get install -y nodejs && \
+    npm install -g pm2 && \
+    mkdir -p /workspace/scripts && \
+    cd /workspace/scripts && \
+    npm init -y && \
+    npm install express http-proxy socket.io
 
 # Install monitoring tools
 RUN wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz && \
@@ -65,19 +69,19 @@ RUN chmod +x /workspace/scripts/*.sh /workspace/download_and_verify_weights.sh
 RUN pip install -r /workspace/Wan2.1/requirements.txt && \
     pip install "huggingface_hub[cli]" flash_attn
 
+# Create directories for monitoring data
+RUN mkdir -p /workspace/data/metrics /workspace/data/logs /workspace/data/fio /workspace/data/videos && \
+    chown -R 1024:1024 /workspace/data
+
 # Set up CentML user for security
 ARG USERNAME="centml"
 RUN useradd -u 1024 -m -d /workspace -s /bin/bash ${USERNAME} && \
     chown -R ${USERNAME}:${USERNAME} /workspace
 
-# Create directories for monitoring data
-RUN mkdir -p /workspace/data/metrics /workspace/data/logs /workspace/data/fio && \
-    chown -R ${USERNAME}:${USERNAME} /workspace/data
-
 USER 1024
 
-# Expose single port for all services
-EXPOSE 8080
+# Expose ports
+EXPOSE 8080 8081 8082 9090 3000
 
 # Download weights and start test suite
 ENTRYPOINT ["/workspace/download_and_verify_weights.sh"]

@@ -14,3 +14,15 @@ scrape_configs:
       - targets: ['localhost:8083']
         labels:
           service: 'system_metrics'
+
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+        labels:
+          service: 'node_metrics'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9091']  # Changed from default 9090 to avoid conflict
+        labels:
+          service: 'prometheus'
