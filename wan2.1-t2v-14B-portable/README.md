@@ -5,7 +5,7 @@ This is a portable version of the Wan2.1 T2V-14B model that can run inside the N
 ## Prerequisites
 
 - Access to `nvcr.io/nvidia/pytorch:24.08-py3` container
-- Write access to `/workspace` directory
+- Write access to `/home/centml` directory
 - Internet access for downloading dependencies and model weights
 
 ## Usage
@@ -23,6 +23,7 @@ chmod +x setup_environment.sh
 ```
 
 This will:
+- Create workspace directory under `/home/centml`
 - Clone all necessary scripts
 - Set up Python virtual environment
 - Install all dependencies
@@ -43,6 +44,6 @@ The Gradio interface will be available at `http://localhost:8080`
 
 ## Notes
 
-- All dependencies are installed in a Python virtual environment under `/workspace/venv`
-- The model weights are stored in `/workspace/Wan2.1/Wan2.1-T2V-14B`
+- All dependencies are installed in a Python virtual environment under `/home/centml/workspace/venv`
+- The model weights are stored in `/home/centml/workspace/Wan2.1/Wan2.1-T2V-14B`
 - All operations are performed without requiring sudo access

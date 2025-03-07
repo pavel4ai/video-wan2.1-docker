@@ -2,19 +2,22 @@
 
 echo "=== Setting up portable environment ==="
 
+# Create workspace directory if it doesn't exist
+mkdir -p /home/centml/workspace
+
 # Clone our repository first to get the necessary scripts
 echo "=== Cloning setup scripts ==="
-git clone https://github.com/pavel4ai/video-wan2.1-docker.git /workspace/temp
-cp /workspace/temp/wan2.1-t2v-14B-portable/setup_environment.sh /workspace/
-cp /workspace/temp/wan2.1-t2v-14B-portable/download_model.sh /workspace/
-cp /workspace/temp/wan2.1-t2v-14B-portable/start_server.sh /workspace/
-rm -rf /workspace/temp
+git clone https://github.com/pavel4ai/video-wan2.1-docker.git /home/centml/workspace/temp
+cp /home/centml/workspace/temp/wan2.1-t2v-14B-portable/setup_environment.sh /home/centml/workspace/
+cp /home/centml/workspace/temp/wan2.1-t2v-14B-portable/download_model.sh /home/centml/workspace/
+cp /home/centml/workspace/temp/wan2.1-t2v-14B-portable/start_server.sh /home/centml/workspace/
+rm -rf /home/centml/workspace/temp
 
 # Create virtual environment in workspace
-python -m venv /workspace/venv
+python -m venv /home/centml/workspace/venv
 
 # Activate virtual environment
-source /workspace/venv/bin/activate
+source /home/centml/workspace/venv/bin/activate
 
 # Upgrade pip in the virtual environment
 pip install --upgrade pip
@@ -23,20 +26,20 @@ pip install --upgrade pip
 pip install wheel packaging torch==2.6
 
 # Clone Wan2.1 repository if not exists
-if [ ! -d "/workspace/Wan2.1" ]; then
+if [ ! -d "/home/centml/workspace/Wan2.1" ]; then
     echo "=== Cloning Wan2.1 repository ==="
-    git clone https://github.com/Wan-Video/Wan2.1.git /workspace/Wan2.1
+    git clone https://github.com/Wan-Video/Wan2.1.git /home/centml/workspace/Wan2.1
 fi
 
 # Install project dependencies
 echo "=== Installing Python dependencies ==="
-pip install -r /workspace/Wan2.1/requirements.txt
+pip install -r /home/centml/workspace/Wan2.1/requirements.txt
 pip install "huggingface_hub[cli]"
 pip install --no-cache-dir packaging torch==2.6 flash_attn
 
 # Modify Gradio port
 echo "=== Modifying Gradio script to use port 8080 ==="
-for file in /workspace/Wan2.1/gradio/t2v_14B_singleGPU.py /workspace/Wan2.1/gradio/t2i_14B_singleGPU.py /workspace/Wan2.1/gradio/i2v_14B_singleGPU.py; do
+for file in /home/centml/workspace/Wan2.1/gradio/t2v_14B_singleGPU.py /home/centml/workspace/Wan2.1/gradio/t2i_14B_singleGPU.py /home/centml/workspace/Wan2.1/gradio/i2v_14B_singleGPU.py; do
     if [ -f "$file" ]; then
         sed -i 's/server_port=7860/server_port=8080/' "$file"
     else
@@ -45,6 +48,6 @@ for file in /workspace/Wan2.1/gradio/t2v_14B_singleGPU.py /workspace/Wan2.1/grad
 done
 
 # Make all scripts executable
-chmod +x /workspace/*.sh
+chmod +x /home/centml/workspace/*.sh
 
 echo "=== Environment setup complete ==="
