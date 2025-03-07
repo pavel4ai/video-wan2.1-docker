@@ -69,19 +69,25 @@ RUN chmod +x /workspace/scripts/*.sh /workspace/download_and_verify_weights.sh
 RUN pip install -r /workspace/Wan2.1/requirements.txt && \
     pip install "huggingface_hub[cli]" flash_attn
 
-# Create directories for monitoring data
-RUN mkdir -p /workspace/data/metrics /workspace/data/logs /workspace/data/fio /workspace/data/videos && \
-    chown -R 1024:1024 /workspace/data
-
 # Set up CentML user for security
 ARG USERNAME="centml"
 RUN useradd -u 1024 -m -d /workspace -s /bin/bash ${USERNAME} && \
-    chown -R ${USERNAME}:${USERNAME} /workspace
+    mkdir -p /workspace/data/metrics /workspace/data/logs /workspace/data/fio /workspace/data/videos && \
+    touch /workspace/data/logs/app.log /workspace/data/logs/prometheus.log \
+          /workspace/data/logs/node_exporter.log /workspace/data/logs/router.log && \
+    chown -R ${USERNAME}:${USERNAME} /workspace && \
+    chown -R ${USERNAME}:${USERNAME} /workspace/data && \
+    chmod -R 755 /workspace/data && \
+    # Set up log directory permissions
+    mkdir -p /var/log/nginx && \
+    touch /var/log/nginx/error.log && \
+    chown -R ${USERNAME}:${USERNAME} /var/log/nginx && \
+    chmod -R 755 /var/log/nginx
 
 USER 1024
 
 # Expose ports
-EXPOSE 8080 8081 8082 9090 3000
+EXPOSE 8080
 
 # Download weights and start test suite
 ENTRYPOINT ["/workspace/download_and_verify_weights.sh"]

@@ -112,15 +112,18 @@ app.get('/', (req, res) => {
                             .then(response => response.json())
                             .then(videos => {
                                 const videoList = document.getElementById('videoList');
-                                videoList.innerHTML = videos.map(video => `
-                                    <div class="video-item">
-                                        <div>${video.name}</div>
-                                        <video controls width="400">
-                                            <source src="/stream/${video.name}" type="video/mp4">
-                                            Your browser does not support the video tag.
-                                        </video>
-                                    </div>
-                                `).join('');
+                                videoList.innerHTML = videos.map(video => 
+                                    '<div class="video-item">' +
+                                        '<div>' + video.name + '</div>' +
+                                        '<video controls width="400">' +
+                                            '<source src="/stream/' + video.name + '" type="video/mp4">' +
+                                            'Your browser does not support the video tag.' +
+                                        '</video>' +
+                                    '</div>'
+                                ).join('');
+                            })
+                            .catch(error => {
+                                console.error('Error updating video list:', error);
                             });
                     }
 

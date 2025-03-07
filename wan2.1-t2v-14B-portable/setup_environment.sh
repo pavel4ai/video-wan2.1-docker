@@ -41,8 +41,8 @@ pip install easydict gradio
 export PATH="/home/centml/.local/bin:$PATH"
 echo 'export PATH="/home/centml/.local/bin:$PATH"' >> /home/centml/.bashrc
 
+pip install opencv-python-headless
 pip install --no-cache-dir packaging torch==2.6 flash_attn
-
 # Modify Gradio port
 echo "=== Modifying Gradio script to use port 8080 ==="
 for file in /home/centml/workspace/Wan2.1/gradio/t2v_14B_singleGPU.py /home/centml/workspace/Wan2.1/gradio/t2i_14B_singleGPU.py /home/centml/workspace/Wan2.1/gradio/i2v_14B_singleGPU.py; do

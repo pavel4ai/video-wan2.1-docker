@@ -5,7 +5,7 @@ wait_for_service() {
     local host=$1
     local port=$2
     local service=$3
-    local retries=30
+    local retries=5
     local wait=2
     
     echo "Waiting for $service to be ready..."
@@ -24,37 +24,40 @@ wait_for_service() {
     fi
 }
 
-# Create necessary directories
+# Create necessary directories and set permissions
+echo "=== Setting up directories and logs ==="
 mkdir -p /workspace/data/videos /workspace/data/metrics /workspace/data/logs
+touch /workspace/data/logs/app.log
+chmod -R 755 /workspace/data
 
 # Start Prometheus with the correct port
 cd /workspace/prometheus
-./prometheus --config.file=/workspace/config/prometheus.yml --web.listen-address=:9091 &
+./prometheus --config.file=/workspace/config/prometheus.yml --web.listen-address=:9091 > /workspace/data/logs/prometheus.log 2>&1 &
 wait_for_service localhost 9091 "Prometheus"
 
 # Start Node Exporter
 cd /workspace/node_exporter
-./node_exporter &
+./node_exporter > /workspace/data/logs/node_exporter.log 2>&1 &
 wait_for_service localhost 9100 "Node Exporter"
-
-# Start Grafana
-service grafana-server start
-wait_for_service localhost 3000 "Grafana"
-
-# Start NGINX
-service nginx start
-wait_for_service localhost 8081 "NGINX"
 
 # Start the router
 cd /workspace/scripts
-node router.js &
+node router.js > /workspace/data/logs/router.log 2>&1 &
 wait_for_service localhost 8080 "Web UI"
+
+# Start NGINX
+echo "=== Starting NGINX ==="
+if [ -f "/workspace/data/logs/nginx.pid" ]; then
+    rm -f /workspace/data/logs/nginx.pid
+fi
+nginx -c /etc/nginx/nginx.conf > /workspace/data/logs/nginx.log 2>&1
+wait_for_service localhost 8081 "NGINX"
 
 echo "=== All services started successfully ==="
 echo "Web UI available at http://localhost:8080"
 echo "Video streaming available at http://localhost:8081"
 echo "Metrics available at http://localhost:9091"
-echo "Grafana available at http://localhost:3000"
 
 # Keep container running and show logs
-tail -f /workspace/data/logs/* /var/log/nginx/error.log
+echo "=== Tailing application logs ==="
+tail -f /workspace/data/logs/*.log
