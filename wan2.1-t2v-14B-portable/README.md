@@ -45,6 +45,10 @@ This will:
 ```
 
 The Gradio interface will be available at `http://localhost:8080`
+It may be accessed (redirected) remotely via ssh port forwarding as:
+```bash
+ssh -L 8080:localhost:8080 user@remote_host
+```
 
 ## Directory Structure
 
