@@ -27,8 +27,8 @@ PROMPTS = [
     "A futuristic cityscape at night with flying vehicles and neon lights, cyberpunk style",
     "A dramatic ocean storm with massive waves and lightning, realistic style",
     "A peaceful garden with butterflies and blooming flowers, dreamy style",
-    "A desert oasis under a starry night sky with shooting stars, artistic style"
-    "A leasurely tropical island white sand shore with realistic palms swaying over blue turquoise waters, realistic style"
+    "A desert oasis under a starry night sky with shooting stars, artistic style",
+    "A leasurely tropical island white sand shore with realistic palms on the beach with their branches slowly swaying over blue turquoise waters, realistic style"
 ]
 
 def verify_environment():
@@ -100,15 +100,17 @@ def run_video_generation(prompt, test_number):
         # Monitor process output
         success_indicators = ["Completed", "100%"]  # Keywords indicating success
         has_error = False
+        found_success = False
         
         while True:
             output = process.stdout.readline()
             if output == '' and process.poll() is not None:
                 break
             if output:
-                # Don't log progress bars as errors
+                # Check for success indicators
                 if any(indicator in output for indicator in success_indicators):
                     logger.info(output.strip())
+                    found_success = True
                 elif "%" in output:  # Progress bar
                     print(output.strip(), end='\r')  # Print progress without logging
                 else:
@@ -132,7 +134,7 @@ def run_video_generation(prompt, test_number):
         return_code = process.wait()
         duration = time.time() - start_time
         
-        success = return_code == 0 and not has_error
+        success = return_code == 0 and not has_error and found_success
         if success:
             logger.info(f"Test {test_number} completed successfully")
             logger.info(f"Generation time: {duration:.2f} seconds")
@@ -140,6 +142,8 @@ def run_video_generation(prompt, test_number):
         else:
             if return_code != 0:
                 logger.error(f"Test {test_number} failed with return code {return_code}")
+            elif not found_success:
+                logger.error(f"Test {test_number} did not show completion indicators")
             return False
     
     except Exception as e:
