@@ -9,7 +9,7 @@ wait_for_service() {
     local wait=2
     
     echo "Waiting for $service to be ready..."
-    while ! nc -z $host $port && [ $retries -gt 0 ]; do
+    while ! (echo > /dev/tcp/$host/$port) >/dev/null 2>&1 && [ $retries -gt 0 ]; do
         retries=$((retries-1))
         echo "Waiting for $service... $retries attempts left"
         sleep $wait

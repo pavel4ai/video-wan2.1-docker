@@ -8,9 +8,9 @@ mkdir -p /home/centml/workspace
 # Clone our repository first to get the necessary scripts
 echo "=== Cloning setup scripts ==="
 git clone https://github.com/pavel4ai/video-wan2.1-docker.git /home/centml/workspace/temp
-cp /home/centml/workspace/temp/wan2.1-t2v-14B-portable/setup_environment.sh /home/centml/workspace/
-cp /home/centml/workspace/temp/wan2.1-t2v-14B-portable/download_model.sh /home/centml/workspace/
-cp /home/centml/workspace/temp/wan2.1-t2v-14B-portable/start_server.sh /home/centml/workspace/
+cp /home/centml/workspace/temp/wan2.1-t2v-14B-portable/setup_environment.sh /home/centml/
+cp /home/centml/workspace/temp/wan2.1-t2v-14B-portable/download_model.sh /home/centml/
+cp /home/centml/workspace/temp/wan2.1-t2v-14B-portable/start_server.sh /home/centml/
 rm -rf /home/centml/workspace/temp
 
 # Create virtual environment in workspace
@@ -35,6 +35,12 @@ fi
 echo "=== Installing Python dependencies ==="
 pip install -r /home/centml/workspace/Wan2.1/requirements.txt
 pip install "huggingface_hub[cli]"
+echo "=== Installing Gradio ==="
+pip install easydict gradio
+# Add huggingface-cli to PATH
+export PATH="/home/centml/.local/bin:$PATH"
+echo 'export PATH="/home/centml/.local/bin:$PATH"' >> /home/centml/.bashrc
+
 pip install --no-cache-dir packaging torch==2.6 flash_attn
 
 # Modify Gradio port
@@ -49,5 +55,9 @@ done
 
 # Make all scripts executable
 chmod +x /home/centml/workspace/*.sh
+chmod +x /home/centml/*.sh
 
 echo "=== Environment setup complete ==="
+echo "Virtual environment location: $VIRTUAL_ENV"
+echo "Python version: $(python --version)"
+echo "Pip version: $(pip --version)"
