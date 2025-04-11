@@ -6,28 +6,35 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Update and install system dependencies
 RUN apt update && apt upgrade -y && \
-    apt install -y python3.11 python3.11-venv python3.11-dev python3.11-distutils python3-pip \
+    apt install -y software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa -y && \
+    apt update
+
+# Install Python and basic tools
+RUN apt install -y python3.11 python3.11-venv python3.11-dev python3.11-distutils python3-pip \
                    git ffmpeg wget && \
-    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
-    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb && \
-    dpkg -i cuda-keyring_1.1-1_all.deb && \
-    apt-get update && \
-    apt-get -y install cuda-toolkit-12-3 && \
-    rm -rf /var/lib/apt/lists/*
-
-# Set CUDA environment variables
-ENV PATH="/usr/local/cuda/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
-
-
-## Upgrade pip and install required Python packages
-RUN pip install --upgrade pip
-RUN pip install wheel packaging torch==2.6
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
 
 # Clone the repository
 WORKDIR /workspace
 RUN echo "=== Cloning Wan2.1 repository ===" && \
     git clone https://github.com/Wan-Video/Wan2.1.git
+
+# Create a modified requirements file without torch and flash_attn
+RUN grep -v "^torch\|^flash_attn" /workspace/Wan2.1/requirements.txt > /workspace/requirements_no_torch.txt
+
+# Create virtual environment and make system torch available
+RUN python -m venv /workspace/venv && \
+    source /workspace/venv/bin/activate && \
+    pip install packaging && \
+    # Make system torch available to virtual environment
+    python -c "import torch; print(f'Using torch {torch.__version__} from {torch.__file__}')" && \
+    # Install other requirements
+    pip install -r /workspace/requirements_no_torch.txt && \
+    # Install flash_attn separately with system torch
+    pip install "huggingface_hub[cli]" && \
+    pip install flash_attn --no-build-isolation
+
 
 # Commenting out the sed command as requested
 RUN echo "=== Modifying Gradio script to use port 8080 ===" && \
@@ -35,15 +42,6 @@ RUN echo "=== Modifying Gradio script to use port 8080 ===" && \
 
 # Copy the updated Gradio script
 #COPY t2v_14B_singleGPU.py /workspace/Wan2.1/gradio/t2v_14B_singleGPU.py
-
-# Install all Python dependencies at once
-RUN echo "=== Installing Python dependencies ===" && \
-    pip install -r /workspace/Wan2.1/requirements.txt && \
-    pip install "huggingface_hub[cli]"
-
-# Final dependency check (if needed)
-RUN echo "=== Performing final dependency check ===" && \
-    pip install --no-cache-dir packaging torch==2.6 flash_attn -r /workspace/Wan2.1/requirements.txt
 
 # Expose only port 8080 for the Gradio server
 EXPOSE 8080

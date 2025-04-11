@@ -14,5 +14,5 @@ else
 fi
 
 echo "=== Executing the Gradio server script ==="
-# Execute the default command
+source /workspace/venv/bin/activate  # Execute the default command
 exec "$@"

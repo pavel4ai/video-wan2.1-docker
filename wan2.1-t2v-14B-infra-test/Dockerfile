@@ -6,11 +6,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Update and install system dependencies
 RUN apt update && apt upgrade -y && \
-    apt install -y python3.11 python3.11-venv python3.11-dev python3.11-distutils python3-pip \
+    apt install -y python3.10 python3.10-venv python3.10-dev python3.10-distutils python3-pip \
                    git ffmpeg wget iperf3 fio nginx htop sysstat \
                    lm-sensors nvme-cli smartmontools iproute2 net-tools \
                    stress-ng hdparm musl && \
-    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
     wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb && \
     dpkg -i cuda-keyring_1.1-1_all.deb && \
     apt-get update && \
