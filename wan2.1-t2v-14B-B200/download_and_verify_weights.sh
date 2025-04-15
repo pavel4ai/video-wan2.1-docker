@@ -5,10 +5,12 @@ echo "=== Starting model weights download ==="
 # Define the target directory (ensure consistency with Dockerfile)
 WEIGHTS_DIR="/workspace/Wan2.1/Wan2.1-T2V-14B"
 MODEL_NAME="Wan-AI/Wan2.1-T2V-14B"
+# Define the explicit path to the CLI tool within the venv
+HUGGINGFACE_CLI="/workspace/venv/bin/huggingface-cli"
 
-# Download the Hugging Face model weights
+# Download the Hugging Face model weights using the explicit path
 # Use --local-dir-use-symlinks False for Docker environments
-huggingface-cli download ${MODEL_NAME} --local-dir ${WEIGHTS_DIR}
+${HUGGINGFACE_CLI} download ${MODEL_NAME} --local-dir ${WEIGHTS_DIR}
 
 # Verify the download
 if [ $? -eq 0 ]; then
