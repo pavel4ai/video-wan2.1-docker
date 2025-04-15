@@ -10,6 +10,7 @@ HUGGINGFACE_CLI="/workspace/venv/bin/huggingface-cli"
 
 # Download the Hugging Face model weights using the explicit path
 # Use --local-dir-use-symlinks False for Docker environments
+echo "=== Calling Hugging Face CLI Command as ${HUGGINGFACE_CLI} download ${MODEL_NAME} --local-dir ${WEIGHTS_DIR} ==="
 ${HUGGINGFACE_CLI} download ${MODEL_NAME} --local-dir ${WEIGHTS_DIR}
 
 # Verify the download
