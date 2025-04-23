@@ -2,7 +2,6 @@ const express = require('express');
 const httpProxy = require('http-proxy');
 const { spawn } = require('child_process');
 const app = express();
-const proxy = httpProxy.createProxyServer();
 const path = require('path');
 const fs = require('fs');
 
@@ -116,7 +115,7 @@ app.get('/', (req, res) => {
                                     '<div class="video-item">' +
                                         '<div>' + video.name + '</div>' +
                                         '<video controls width="400">' +
-                                            '<source src="/stream/' + video.name + '" type="video/mp4">' +
+                                            '<source src="/videos/' + video.name + '" type="video/mp4">' +
                                             'Your browser does not support the video tag.' +
                                         '</video>' +
                                     '</div>'
@@ -188,28 +187,6 @@ app.get('/api/videos', (req, res) => {
     });
 });
 
-// Route /metrics to Prometheus
-app.use('/metrics', (req, res) => {
-    proxy.web(req, res, { target: 'http://localhost:9091' });
-});
-
-// Route /grafana to Grafana
-app.use('/grafana', (req, res) => {
-    proxy.web(req, res, { target: 'http://localhost:3000' });
-});
-
-// Route /stream to NGINX for video streaming
-app.use('/stream', (req, res) => {
-    proxy.web(req, res, { target: 'http://localhost:8081' });
-});
-
-// Error handling for proxy
-proxy.on('error', (err, req, res) => {
-    console.error('Proxy error:', err);
-    res.writeHead(500, { 'Content-Type': 'text/plain' });
-    res.end('Proxy error');
-});
-
-app.listen(8080, () => {
-    console.log('Router started on port 8080');
+app.listen(8083, () => {
+    console.log('Router started on port 8083');
 });

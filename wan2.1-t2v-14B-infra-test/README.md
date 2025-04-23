@@ -64,9 +64,9 @@ http://localhost:8080
 
 All services are routed through port 8080:
 - `/` - Main control panel UI
-- `/metrics` - Prometheus metrics
-- `/grafana` - Grafana dashboards
-- `/stream` - Video streaming endpoint to view the generated videos
+- `/prometheus/` - Prometheus metrics endpoint (via NGINX proxy)
+- `/grafana/` - Grafana dashboards (via NGINX proxy)
+- `/videos/` - Video browsing and streaming endpoint (served by NGINX)
 
 ## Test Results
 

@@ -1,10 +1,23 @@
 #!/bin/bash
 
+echo "--- VERIFYING FILE CONTENTS --- START ---"
+echo "router.js listen line:"
+grep 'app.listen' /workspace/scripts/router.js
+echo "nginx.conf mp4 line:"
+grep 'mp4;' /workspace/config/nginx.conf || echo "nginx.conf: mp4 directive not found (or commented out)"
+echo "start_test_suite.sh Router App wait line:"
+grep 'wait_for_service.*Router App' /workspace/scripts/start_test_suite.sh
+echo "--- VERIFYING FILE CONTENTS --- END ---"
+
+# Flag to track startup success
+ALL_SERVICES_STARTED=true
+
 # Function to wait for a service to be ready
 wait_for_service() {
     local host=$1
     local port=$2
     local service=$3
+    echo "--> Checking service '$service' readiness on $host:$port..."
     local retries=5
     local wait=2
     
@@ -16,11 +29,12 @@ wait_for_service() {
     done
     
     if [ $retries -eq 0 ]; then
-        echo "Error: $service failed to start"
-        return 1
+        echo "Error: $service failed to start on $host:$port"
+        ALL_SERVICES_STARTED=false # Set flag to false on failure
+        return 1 # Return error code
     else
         echo "$service is ready"
-        return 0
+        return 0 # Return success code
     fi
 }
 
@@ -30,34 +44,60 @@ mkdir -p /workspace/data/videos /workspace/data/metrics /workspace/data/logs
 touch /workspace/data/logs/app.log
 chmod -R 755 /workspace/data
 
+# Check NGINX config early
+echo "=== Checking NGINX configuration ==="
+nginx -t -c /etc/nginx/nginx.conf
+if [ $? -ne 0 ]; then
+    echo "Error: NGINX configuration test failed. Check logs." # Shortened message
+    exit 1
+fi
+
 # Start Prometheus with the correct port
 cd /workspace/prometheus
 ./prometheus --config.file=/workspace/config/prometheus.yml --web.listen-address=:9091 > /workspace/data/logs/prometheus.log 2>&1 &
-wait_for_service localhost 9091 "Prometheus"
+sleep 1 # Add a small delay before checking Prometheus port
+wait_for_service localhost 9091 "Prometheus" || exit 1 # Exit if Prometheus fails
 
 # Start Node Exporter
 cd /workspace/node_exporter
 ./node_exporter > /workspace/data/logs/node_exporter.log 2>&1 &
-wait_for_service localhost 9100 "Node Exporter"
+wait_for_service localhost 9100 "Node Exporter" || exit 1 # Exit if Node Exporter fails
 
 # Start the router
 cd /workspace/scripts
 node router.js > /workspace/data/logs/router.log 2>&1 &
-wait_for_service localhost 8080 "Web UI"
+wait_for_service localhost 8083 "Router App" || exit 1 # Changed port from 8082 to 8083
 
-# Start NGINX
+# Start Grafana
+echo "=== Starting Grafana ==="
+mkdir -p /var/lib/grafana /workspace/data/logs/grafana
+chown centml:centml /var/lib/grafana /workspace/data/logs/grafana
+grafana-server --homepath=/usr/share/grafana --config=/etc/grafana/grafana.ini \
+  cfg:default.paths.logs=/workspace/data/logs/grafana \
+  cfg:default.paths.data=/var/lib/grafana \
+  cfg:default.server.http_port=3000 > /workspace/data/logs/grafana.log 2>&1 &
+wait_for_service localhost 3000 "Grafana" || exit 1 # Exit if Grafana fails
+
+# Start NGINX (config already checked)
 echo "=== Starting NGINX ==="
 if [ -f "/workspace/data/logs/nginx.pid" ]; then
     rm -f /workspace/data/logs/nginx.pid
 fi
-nginx -c /etc/nginx/nginx.conf > /workspace/data/logs/nginx.log 2>&1
-wait_for_service localhost 8081 "NGINX"
+nginx -c /etc/nginx/nginx.conf
+wait_for_service localhost 8080 "NGINX" || exit 1 # Exit if NGINX fails
 
-echo "=== All services started successfully ==="
-echo "Web UI available at http://localhost:8080"
-echo "Video streaming available at http://localhost:8081"
-echo "Metrics available at http://localhost:9091"
+# Only proceed if all services started
+if [ "$ALL_SERVICES_STARTED" = true ]; then
+    echo "=== All services started successfully ===" 
+    echo "Web UI & API available at http://localhost:8080/"
+    echo "Video browsing available at http://localhost:8080/videos/"
+    echo "Prometheus available at http://localhost:8080/prometheus/"
+    echo "Grafana available at http://localhost:8080/grafana/"
 
-# Keep container running and show logs
-echo "=== Tailing application logs ==="
-tail -f /workspace/data/logs/*.log
+    # Keep container running and show logs
+    echo "=== Tailing application logs ==="
+    tail -f /workspace/data/logs/*.log
+else
+    echo "!!! Critical service failed to start. Exiting. Check logs above and in /workspace/data/logs/ for details. !!!"
+    exit 1
+fi
