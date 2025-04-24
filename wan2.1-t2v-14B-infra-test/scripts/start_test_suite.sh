@@ -17,11 +17,9 @@ wait_for_service() {
     local host=$1
     local port=$2
     local service=$3
-    echo "--> Checking service '$service' readiness on $host:$port..."
     local retries=5
     local wait=2
     
-    echo "Waiting for $service to be ready..."
     while ! (echo > /dev/tcp/$host/$port) >/dev/null 2>&1 && [ $retries -gt 0 ]; do
         retries=$((retries-1))
         echo "Waiting for $service... $retries attempts left"
@@ -79,9 +77,7 @@ grafana-server \
   cfg:default.paths.plugins=/workspace/grafana/plugins \
   cfg:default.paths.provisioning=/workspace/grafana/provisioning \
   cfg:default.server.http_port=3000 > /workspace/grafana/logs/grafana.log 2>&1 &
-if ! wait_for_service localhost 3000 "Grafana"; then
-    echo "Warning: Grafana failed to start. The rest of the test suite will continue."
-fi
+#wait_for_service localhost 3000 "Grafana" || exit 1 # Exit if Grafana fails
         
 # Start NGINX (config already checked)
 echo "=== Starting NGINX ==="
