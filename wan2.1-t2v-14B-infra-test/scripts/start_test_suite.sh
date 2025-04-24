@@ -79,7 +79,9 @@ grafana-server \
   cfg:default.paths.plugins=/workspace/grafana/plugins \
   cfg:default.paths.provisioning=/workspace/grafana/provisioning \
   cfg:default.server.http_port=3000 > /workspace/grafana/logs/grafana.log 2>&1 &
-wait_for_service localhost 3000 "Grafana" || exit 1 # Exit if Grafana fails
+if ! wait_for_service localhost 3000 "Grafana"; then
+    echo "Warning: Grafana failed to start. The rest of the test suite will continue."
+fi
         
 # Start NGINX (config already checked)
 echo "=== Starting NGINX ==="
