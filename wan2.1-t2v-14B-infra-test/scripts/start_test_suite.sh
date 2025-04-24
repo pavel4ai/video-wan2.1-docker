@@ -44,9 +44,11 @@ mkdir -p /workspace/data/videos /workspace/data/metrics /workspace/data/logs
 touch /workspace/data/logs/app.log
 chmod -R 755 /workspace/data
 
-# Check NGINX config early
 echo "=== Checking NGINX configuration ==="
-nginx -t -c /etc/nginx/nginx.conf
+
+nginx -t -c /workspace/config/nginx.conf
+nginx -c /workspace/config/nginx.conf
+
 if [ $? -ne 0 ]; then
     echo "Error: NGINX configuration test failed. Check logs." # Shortened message
     exit 1
@@ -83,7 +85,7 @@ echo "=== Starting NGINX ==="
 if [ -f "/workspace/data/logs/nginx.pid" ]; then
     rm -f /workspace/data/logs/nginx.pid
 fi
-nginx -c /etc/nginx/nginx.conf
+nginx -c /workspace/config/nginx.conf
 wait_for_service localhost 8080 "NGINX" || exit 1 # Exit if NGINX fails
 
 # Only proceed if all services started
