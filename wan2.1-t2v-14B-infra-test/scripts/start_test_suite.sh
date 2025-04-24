@@ -69,15 +69,15 @@ node router.js > /workspace/data/logs/router.log 2>&1 &
 wait_for_service localhost 8083 "Router App" || exit 1 # Changed port from 8082 to 8083
 
 # Start Grafana
-echo "=== Starting Grafana ==="
-mkdir -p /workspace/grafana/data /workspace/grafana/logs /workspace/grafana/plugins /workspace/grafana/provisioning
-grafana-server \
-  cfg:default.paths.data=/workspace/grafana/data \
-  cfg:default.paths.logs=/workspace/grafana/logs \
-  cfg:default.paths.plugins=/workspace/grafana/plugins \
-  cfg:default.paths.provisioning=/workspace/grafana/provisioning \
-  cfg:default.server.http_port=3000 > /workspace/grafana/logs/grafana.log 2>&1 &
-wait_for_service localhost 3000 "Grafana" || exit 1 # Exit if Grafana fails
+#echo "=== Starting Grafana ==="
+#mkdir -p /workspace/grafana/data /workspace/grafana/logs /workspace/grafana/plugins /workspace/grafana/provisioning
+#grafana-server \
+#  cfg:default.paths.data=/workspace/grafana/data \
+#  cfg:default.paths.logs=/workspace/grafana/logs \
+#  cfg:default.paths.plugins=/workspace/grafana/plugins \
+#  cfg:default.paths.provisioning=/workspace/grafana/provisioning \
+#  cfg:default.server.http_port=3000 > /workspace/grafana/logs/grafana.log 2>&1 &
+#wait_for_service localhost 3000 "Grafana" || exit 1 # Exit if Grafana fails
         
 # Start NGINX (config already checked)
 echo "=== Starting NGINX ==="
