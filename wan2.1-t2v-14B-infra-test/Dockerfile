@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Use NVIDIA PyTorch as the base image
 FROM nvcr.io/nvidia/pytorch:24.08-py3
 
@@ -41,10 +42,6 @@ RUN wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prom
     apt-get update && apt-get install -y adduser libfontconfig1 musl && \
     dpkg -i grafana-enterprise_11.5.2_amd64.deb
 
-# Configure NGINX for video streaming
-COPY config/nginx.conf /etc/nginx/nginx.conf
-RUN mkdir -p /var/www/html/stream
-
 WORKDIR /workspace
 
 # Set up Python environment and dependencies
@@ -54,16 +51,27 @@ RUN pip install --upgrade pip && \
                 flask flask-socketio aiohttp psutil py-cpuinfo \
                 matplotlib seaborn pandas plotly
 
-# Clone repositories
-RUN git clone https://github.com/Wan-Video/Wan2.1.git /workspace/Wan2.1 && \
-    git clone https://github.com/pavel4ai/video-wan2.1-docker.git /workspace/temp && \
-    cp -r /workspace/temp/wan2.1-t2v-14B-infra-test/scripts /workspace/ && \
-    cp -r /workspace/temp/wan2.1-t2v-14B-infra-test/config /workspace/ && \
-    cp /workspace/temp/wan2.1-t2v-14b/download_and_verify_weights.sh /workspace/ && \
-    rm -rf /workspace/temp
 
-# Make scripts executable
-RUN chmod +x /workspace/scripts/*.sh /workspace/download_and_verify_weights.sh
+RUN git clone https://github.com/Wan-Video/Wan2.1.git /workspace/Wan2.1
+# Ensure git and openssh-client are installed
+RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client && rm -rf /var/lib/apt/lists/*
+
+# Clone repo, copy necessary files, set permissions, and clean up
+RUN git clone https://github.com/pavel4ai/video-wan2.1-docker.git /workspace/temp && \
+    # Copy scripts and config directories TO /workspace
+    echo "--- Copying scripts and config ---" && \
+    cp -r /workspace/temp/wan2.1-t2v-14B-infra-test/scripts /workspace && \
+    cp -r /workspace/temp/wan2.1-t2v-14B-infra-test/config /workspace && \
+    # Make scripts executable (ensure paths are correct based on ls output)
+    echo "--- Setting script permissions ---" && \
+    chmod +x /workspace/scripts/download_and_verify_weights.sh /workspace/scripts/start_test_suite.sh && \
+    # Create NGINX directories
+    mkdir -p /workspace/nginx/body_temp /workspace/nginx/proxy_temp /workspace/nginx/fastcgi_temp /workspace/nginx/uwsgi_temp /workspace/nginx/scgi_temp && \
+    chown -R 1024:1024 /workspace/nginx && \
+    chmod -R 755 /workspace/nginx && \
+    # Clean up temp directory
+    echo "--- Cleaning up /workspace/temp ---" && \
+    rm -rf /workspace/temp
 
 # Install all Python dependencies
 RUN pip install -r /workspace/Wan2.1/requirements.txt && \
@@ -90,5 +98,5 @@ USER 1024
 EXPOSE 8080
 
 # Download weights and start test suite
-ENTRYPOINT ["/workspace/download_and_verify_weights.sh"]
+ENTRYPOINT ["/workspace/scripts/download_and_verify_weights.sh"]
 CMD ["/workspace/scripts/start_test_suite.sh"]
