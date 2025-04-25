@@ -42,9 +42,6 @@ mkdir -p /workspace/data/videos /workspace/data/metrics /workspace/data/logs
 touch /workspace/data/logs/app.log
 chmod -R 755 /workspace/data
 
-echo "=== Checking NGINX configuration ==="
-
-nginx -t -c /workspace/config/nginx.conf
 nginx -c /workspace/config/nginx.conf
 
 if [ $? -ne 0 ]; then
@@ -77,7 +74,7 @@ grafana-server --homepath=/usr/share/grafana \
   cfg:default.paths.plugins=/workspace/grafana/plugins \
   cfg:default.paths.provisioning=/workspace/grafana/provisioning \
   cfg:default.server.http_port=3000 > /workspace/grafana/logs/grafana.log 2>&1 &
-#wait_for_service localhost 3000 "Grafana" || exit 1 # Exit if Grafana fails
+wait_for_service localhost 3000 "Grafana" || exit 1 # Exit if Grafana fails
         
 # Start NGINX (config already checked)
 echo "=== Starting NGINX ==="
