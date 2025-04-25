@@ -49,7 +49,7 @@ touch /workspace/data/logs/app.log
 chmod -R 755 /workspace/data
 
 echo "=== Testing NGINX configuration ==="
-nginx -t /workspace/config/nginx.conf
+nginx -t -c /workspace/config/nginx.conf
 if [ $? -ne 0 ]; then
     echo "Error: NGINX configuration test failed. Check logs."
     exit 1
