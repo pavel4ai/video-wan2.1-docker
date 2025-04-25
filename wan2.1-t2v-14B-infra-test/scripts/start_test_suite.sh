@@ -87,15 +87,15 @@ if [ -f "/workspace/data/logs/nginx.pid" ]; then
     rm -f /workspace/data/logs/nginx.pid
 fi
 nginx -c /workspace/config/nginx.conf
-wait_for_service localhost 8080 "NGINX" || exit 1 # Exit if NGINX fails
+wait_for_service localhost 8888 "NGINX" || exit 1 # Exit if NGINX fails
 
 # Only proceed if all services started
 if [ "$ALL_SERVICES_STARTED" = true ]; then
     echo "=== All services started successfully ===" 
-    echo "Web UI & API available at http://localhost:8080/"
-    echo "Video browsing available at http://localhost:8080/videos/"
-    echo "Prometheus available at http://localhost:8080/prometheus/"
-    echo "Grafana available at http://localhost:8080/grafana/"
+    echo "Web UI & API available at http://localhost:8888/"
+    echo "Video browsing available at http://localhost:8888/videos/"
+    echo "Prometheus available at http://localhost:8888/prometheus/"
+    echo "Grafana available at http://localhost:8888/grafana/"
 
     # Keep container running and show logs
     echo "=== Tailing application logs ==="
