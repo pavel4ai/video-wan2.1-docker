@@ -42,10 +42,10 @@ mkdir -p /workspace/data/videos /workspace/data/metrics /workspace/data/logs
 touch /workspace/data/logs/app.log
 chmod -R 755 /workspace/data
 
-nginx -c /workspace/config/nginx.conf
-
+echo "=== Testing NGINX configuration ==="
+nginx -t -c /workspace/config/nginx.conf
 if [ $? -ne 0 ]; then
-    echo "Error: NGINX configuration test failed. Check logs." # Shortened message
+    echo "Error: NGINX configuration test failed. Check logs."
     exit 1
 fi
 
