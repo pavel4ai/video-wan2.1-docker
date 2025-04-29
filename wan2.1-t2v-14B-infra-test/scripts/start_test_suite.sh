@@ -56,9 +56,9 @@ if [ $? -ne 0 ]; then
 fi
 
 # Start the router
-#cd /workspace/scripts
-#node router.js > /workspace/data/logs/router.log 2>&1 &
-#wait_for_service localhost 8083 "Router App" || exit 1 # Changed port from 8082 to 8083
+cd /workspace/scripts
+node router.js > /workspace/data/logs/router.log 2>&1 &
+wait_for_service localhost 8083 "Router App" || exit 1 # Changed port from 8082 to 8083
 
         
 # Start NGINX (config already checked)

@@ -52,16 +52,17 @@ while true; do
     TIMESTAMP=$(get_timestamp)
 
     # Collect CPU stats (sar -u: CPU utilization)
-    # Extract the 'Average:' line which summarizes all CPUs, remove 'Average:', prepend timestamp
-    sar -u 1 1 | awk -v ts="$TIMESTAMP" '/^Average:/ {gsub("Average:",""); printf "%s,%s\\n", ts, $0}' >> "$CPU_LOG"
+    # Force C locale, set OFS, remove Average: and all fields, print timestamp and rest
+    LC_ALL=C sar -u 1 1 | awk -v ts="$TIMESTAMP" 'BEGIN{OFS=","} /^Average:/ { $1=""; $2=""; printf "%s%s\n", ts, $0 }' >> "$CPU_LOG"
 
     # Collect Memory stats (sar -r: Memory utilization)
-    sar -r 1 1 | awk -v ts="$TIMESTAMP" '/^Average:/ {gsub("Average:",""); printf "%s,%s\\n", ts, $0}' >> "$MEM_LOG"
+    # Force C locale, set OFS, remove Average: field, print timestamp and rest
+    LC_ALL=C sar -r 1 1 | awk -v ts="$TIMESTAMP" 'BEGIN{OFS=","} /^Average:/ { $1=""; printf "%s%s\n", ts, $0 }' >> "$MEM_LOG"
 
     # Collect Disk I/O stats (sar -d: Disk activity for specific device)
-    # Need to handle potential device name issues if $DEV is not block device
+    # Force C locale, set OFS, remove Average: and device fields, print timestamp and rest
     if [ -b "/dev/$DEV" ]; then
-        sar -d -p 1 1 | awk -v ts="$TIMESTAMP" -v dev="$DEV" '$1=="Average:" && $2==dev { $1=""; $2=""; printf "%s,%s\\n", ts, substr($0,3) }' >> "$DISK_LOG"
+        LC_ALL=C sar -d -p 1 1 | awk -v ts="$TIMESTAMP" -v dev="$DEV" 'BEGIN{OFS=","} /^Average:/ && $2==dev { $1=""; $2=""; printf "%s%s\n", ts, $0 }' >> "$DISK_LOG"
     else
         # Log placeholder if device not found/valid
         echo "$TIMESTAMP,,,,,,,,,,," >> "$DISK_LOG"
@@ -69,7 +70,7 @@ while true; do
 
     # Collect GPU stats (nvidia-smi)
     # Query specific metrics, format as CSV, handle multiple GPUs
-    nvidia-smi --query-gpu=index,utilization.gpu,memory.total,memory.used,memory.free,temperature.gpu,power.draw --format=csv,noheader,nounits | awk -v ts="$TIMESTAMP" '{printf "%s,%s\\n", ts, $0}' >> "$GPU_LOG"
+    nvidia-smi --query-gpu=index,utilization.gpu,memory.total,memory.used,memory.free,temperature.gpu,power.draw --format=csv,noheader,nounits | awk -v ts="$TIMESTAMP" 'BEGIN{OFS=","} {printf "%s,%s\n", ts, $0}' >> "$GPU_LOG"
 
     sleep "$INTERVAL"
 done
