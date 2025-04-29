@@ -55,27 +55,11 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Start Prometheus with the correct port
-# cd /workspace/prometheus
-# ./prometheus --config.file=/workspace/config/prometheus.yml --web.listen-address=:9091 --web.external-url=http://localhost:8888/prometheus/ > /workspace/data/logs/prometheus.log 2>&1 &
-# sleep 1 # Add a small delay before checking Prometheus port
-# wait_for_service localhost 9091 "Prometheus" || exit 1 # Exit if Prometheus fails
-
-# Start Node Exporter
-# cd /workspace/node_exporter
-# ./node_exporter > /workspace/data/logs/node_exporter.log 2>&1 &
-# wait_for_service localhost 9100 "Node Exporter" || exit 1 # Exit if Node Exporter fails
-
 # Start the router
-cd /workspace/scripts
-node router.js > /workspace/data/logs/router.log 2>&1 &
-wait_for_service localhost 8083 "Router App" || exit 1 # Changed port from 8082 to 8083
+#cd /workspace/scripts
+#node router.js > /workspace/data/logs/router.log 2>&1 &
+#wait_for_service localhost 8083 "Router App" || exit 1 # Changed port from 8082 to 8083
 
-# Start Grafana
-# echo "=== Starting Grafana ==="
-# mkdir -p /workspace/grafana/data /workspace/grafana/logs /workspace/grafana/plugins /workspace/grafana/provisioning
-# grafana-server --homepath=/usr/share/grafana --config=/workspace/config/grafana.ini > /workspace/grafana/logs/grafana.log 2>&1 &
-# wait_for_service localhost 3000 "Grafana" || exit 1 # Exit if Grafana fails
         
 # Start NGINX (config already checked)
 echo "=== Starting NGINX ==="
