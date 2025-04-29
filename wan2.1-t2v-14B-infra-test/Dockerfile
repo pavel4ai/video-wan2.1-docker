@@ -31,17 +31,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     npm init -y && \
     npm install express http-proxy socket.io
 
-# Install monitoring tools
-RUN wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz && \
-    tar xvfz prometheus-2.45.0.linux-amd64.tar.gz && \
-    mv prometheus-2.45.0.linux-amd64 prometheus && \
-    wget https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz && \
-    tar xvfz node_exporter-1.7.0.linux-amd64.tar.gz && \
-    mv node_exporter-1.7.0.linux-amd64 node_exporter && \
-    wget https://dl.grafana.com/enterprise/release/grafana-enterprise_11.5.2_amd64.deb && \
-    apt-get update && apt-get install -y adduser libfontconfig1 musl && \
-    dpkg -i grafana-enterprise_11.5.2_amd64.deb
-
 WORKDIR /workspace
 
 # Set up Python environment and dependencies
@@ -65,10 +54,12 @@ RUN git clone https://github.com/pavel4ai/video-wan2.1-docker.git /workspace/tem
     # Make scripts executable (ensure paths are correct based on ls output)
     echo "--- Setting script permissions ---" && \
     chmod +x /workspace/scripts/download_and_verify_weights.sh /workspace/scripts/start_test_suite.sh && \
+    chmod +x /workspace/scripts/collect_metrics.sh && \
     # Create NGINX directories
     mkdir -p /workspace/nginx/body_temp /workspace/nginx/proxy_temp /workspace/nginx/fastcgi_temp /workspace/nginx/uwsgi_temp /workspace/nginx/scgi_temp && \
     chown -R 1024:1024 /workspace/nginx && \
     chmod -R 755 /workspace/nginx && \
+    mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak && \
     # Clean up temp directory
     echo "--- Cleaning up /workspace/temp ---" && \
     rm -rf /workspace/temp
@@ -81,8 +72,7 @@ RUN pip install -r /workspace/Wan2.1/requirements.txt && \
 ARG USERNAME="centml"
 RUN useradd -u 1024 -m -d /workspace -s /bin/bash ${USERNAME} && \
     mkdir -p /workspace/data/metrics /workspace/data/logs /workspace/data/fio /workspace/data/videos && \
-    touch /workspace/data/logs/app.log /workspace/data/logs/prometheus.log \
-          /workspace/data/logs/node_exporter.log /workspace/data/logs/router.log && \
+    touch /workspace/data/logs/app.log /workspace/data/logs/router.log && \
     chown -R ${USERNAME}:${USERNAME} /workspace && \
     chown -R ${USERNAME}:${USERNAME} /workspace/data && \
     chmod -R 755 /workspace/data && \
