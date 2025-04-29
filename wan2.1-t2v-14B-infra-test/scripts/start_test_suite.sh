@@ -55,7 +55,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Start the router
+# Start the router and wait for it to be ready
 cd /workspace/scripts
 node router.js > /workspace/data/logs/router.log 2>&1 &
 wait_for_service localhost 8083 "Router App" || exit 1 # Changed port from 8082 to 8083
