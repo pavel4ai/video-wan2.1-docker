@@ -23,13 +23,18 @@ ENV PATH="/usr/local/cuda/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 
 # Install Node.js and dependencies
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+# Ensure curl and gnupg are present before running setup scripts
+RUN apt-get update && apt-get install -y curl gnupg && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x -o nodesource_setup.sh && \
+    bash nodesource_setup.sh && \
     apt-get update && apt-get install -y nodejs && \
     npm install -g pm2 && \
     mkdir -p /workspace/scripts && \
     cd /workspace/scripts && \
     npm init -y && \
-    npm install express http-proxy socket.io
+    npm install express http-proxy socket.io && \
+    rm /workspace/nodesource_setup.sh # Clean up the setup script from workspace dir
 
 #RUN mkdir -p /var/lib/grafana /var/log/grafana && chmod 777 /var/lib/grafana /var/log/grafana
 
@@ -98,7 +103,7 @@ RUN useradd -u 1024 -m -d /workspace -s /bin/bash ${USERNAME} && \
 USER 1024
 
 # Expose ports
-EXPOSE 8080
+EXPOSE 8888
 
 # Download weights and start test suite
 ENTRYPOINT ["/workspace/scripts/download_and_verify_weights.sh"]

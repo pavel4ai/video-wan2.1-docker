@@ -1,10 +1,10 @@
 #!/bin/bash
-set -x  # Echo every command as it runs
-exec > >(tee -a /workspace/data/logs/startup_debug.log) 2>&1
-echo "=== STARTUP DEBUG LOG ==="
-date
-ps aux
-env
+#set -x  # Echo every command as it runs
+#exec > >(tee -a /workspace/data/logs/startup_debug.log) 2>&1
+#echo "=== STARTUP DEBUG LOG ==="
+#date
+#ps aux
+#env
 
 echo "--- VERIFYING FILE CONTENTS --- START ---"
 echo "router.js listen line:"

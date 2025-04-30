@@ -8,10 +8,10 @@ huggingface-cli download Wan-AI/Wan2.1-T2V-14B --local-dir /workspace/Wan2.1/Wan
 
 # Verify the download
 if [ $? -eq 0 ]; then
-    echo "=== Model weights downloaded successfully (SKIPPED CHECK) ==="
+    echo "=== Model weights downloaded successfully ==="
 else
-     echo "=== Failed to download model weights (SKIPPED CHECK - Error Ignored) ==="
-     # exit 1 # Do not exit on simulated failure during testing
+     echo "=== Failed to download model weights  ==="
+     exit 1 # Do not exit on simulated failure during testing
 fi
 
 
