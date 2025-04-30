@@ -52,8 +52,8 @@ while true; do
     TIMESTAMP=$(get_timestamp)
 
     # Collect CPU stats (sar -u: CPU utilization)
-    # Force C locale, set OFS, remove Average: and all fields, print timestamp and rest
-    LC_ALL=C sar -u 1 1 | awk -v ts="$TIMESTAMP" 'BEGIN{OFS=","} /^Average:/ { $1=""; $2=""; printf "%s%s\n", ts, $0 }' >> "$CPU_LOG"
+    # Force C locale, set OFS, match Average:, print timestamp and fields $3-$8 explicitly
+    LC_ALL=C sar -u 1 1 | awk -v ts="$TIMESTAMP" 'BEGIN{OFS=","} /^Average:/ { printf "%s,%s,%s,%s,%s,%s,%s\n", ts, $3, $4, $5, $6, $7, $8 }' >> "$CPU_LOG"
 
     # Collect Memory stats (sar -r: Memory utilization)
     # Force C locale, set OFS, remove Average: field, print timestamp and rest
