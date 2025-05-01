@@ -1,6 +1,7 @@
 <html> 
             <head>
                 <title>Wan2.1 Infrastructure Test Suite</title>
+                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
                 <style>
                     body { font-family: Arial, sans-serif; margin: 20px; }
                     button { padding: 10px 20px; margin: 10px 0; cursor: pointer; }
@@ -12,17 +13,14 @@
                     .command-block { background: #2d2d2d; color: #fff; padding: 15px; border-radius: 4px; font-family: monospace; margin: 10px 0; }
                     .test-results { margin-top: 15px; }
                     .test-type { font-weight: bold; margin-top: 10px; }
-                    #systemMetrics table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-                    #systemMetrics th, #systemMetrics td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                    #systemMetrics th { background-color: #f2f2f2; }
+                    .chart-container { width: 90%; max-width: 800px; margin: 20px auto; }
                 </style>
             </head>
             <body>
                 <h1>Test Control Panel</h1>
                 <div>
                     <h2>Video Generation Tests</h2>
-                    <button id="startVideoTestButton" onclick="startVideoTest()">Start Video Generation Test</button>
-                    <div id="videoStatus" class="status">Status: Ready</div>
+                    <div id="videoStatus" class="status">Status: Test running automatically...</div>
                 </div>
                 <div class="network-test-section">
                     <h2>Network Tests</h2>
@@ -68,7 +66,7 @@
                 <div>
                     <h2>System Performance Monitoring</h2>
                     <div id="systemMetrics">
-                        Click "Start Video Generation Test" to begin monitoring.
+                        Loading metrics...
                     </div>
                 </div>
                 <div>
@@ -78,35 +76,47 @@
 
                 <script>
                     let metricsIntervalId = null;
+                    let charts = {};
 
-                    function startVideoTest() {
-                        document.getElementById('videoStatus').textContent = 'Status: Starting video generation and metrics collection...';
-                        document.getElementById('startVideoTestButton').disabled = true;
-                        document.getElementById('systemMetrics').innerHTML = 'Starting...';
-
-                        fetch('/api/start-video-test')
-                            .then(response => {
-                                if (!response.ok) {
-                                    return response.json().then(err => { throw new Error(err.message || `HTTP error! status: ${response.status}`); });
+                    function createOrUpdateChart(ctx, chartId, labels, datasets) {
+                        if (charts[chartId]) {
+                            charts[chartId].data.labels = labels;
+                            charts[chartId].data.datasets.forEach((dataset, index) => {
+                                if (datasets[index]) {
+                                    dataset.data = datasets[index].data;
                                 }
-                                return response.json(); // Expect JSON back
-                            }) 
-                            .then(data => {
-                                document.getElementById('videoStatus').textContent = 'Status: ' + data.message;
-                                if (data.status === 'started') {
-                                    // Start polling for metrics
-                                    metricsIntervalId = setInterval(updateMetricsDisplay, 3000); // Update every 3 seconds
-                                    updateMetricsDisplay(); // Initial update
-                                } else {
-                                    // Handle cases where it didn't start (e.g., already running)
-                                     document.getElementById('startVideoTestButton').disabled = false; 
-                                }
-                            })
-                            .catch(error => {
-                                document.getElementById('videoStatus').textContent = 'Status: Error - ' + error.message;
-                                document.getElementById('startVideoTestButton').disabled = false;
-                                document.getElementById('systemMetrics').innerHTML = 'Failed to start test.';
                             });
+                            charts[chartId].update('none');
+                        } else {
+                            charts[chartId] = new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: labels,
+                                    datasets: datasets
+                                },
+                                options: {
+                                    scales: {
+                                        x: {
+                                            ticks: { 
+                                                autoSkip: true, 
+                                                maxTicksLimit: 10,
+                                                callback: function(value, index, values) {
+                                                    const label = this.getLabelForValue(value);
+                                                    return label.split('T')[1]?.split('+')[0] || label;
+                                                }
+                                            }
+                                        },
+                                        y: {
+                                            beginAtZero: true
+                                        }
+                                    },
+                                    animation: false,
+                                    plugins: {
+                                        legend: { position: 'top' }
+                                    }
+                                }
+                            });
+                        }
                     }
 
                     function stopMetricsPolling(message = 'Polling stopped.') {
@@ -114,7 +124,6 @@
                             clearInterval(metricsIntervalId);
                             metricsIntervalId = null;
                             console.log(message);
-                            document.getElementById('startVideoTestButton').disabled = false;
                         }
                     }
 
@@ -122,75 +131,101 @@
                         fetch('/api/metrics')
                             .then(response => {
                                 if (!response.ok) {
+                                    if (response.status === 404) {
+                                         console.log('Metrics endpoint returned 404, assuming test ended.');
+                                         document.getElementById('videoStatus').textContent = 'Status: Test ended or metrics unavailable.';
+                                         stopMetricsPolling('Metrics endpoint 404. Stopping polling.');
+                                         return null;
+                                    }
                                     throw new Error(`HTTP error! status: ${response.status}`);
                                 }
                                 return response.json();
                              })
                             .then(metrics => {
-                                const metricsDiv = document.getElementById('systemMetrics');
-                                let html = '<h4>Latest Metrics:</h4>';
+                                if (!metrics) return;
 
-                                // Check if video test completed (more robust check needed ideally)
-                                if (metrics.video_test_active === false) {
-                                    document.getElementById('videoStatus').textContent = 'Status: Video generation completed.'; // Update status
+                                const metricsDiv = document.getElementById('systemMetrics');
+                                const timestamps = metrics.cpu?.timestamps || metrics.memory?.timestamps || metrics.disk?.timestamps || metrics.gpu?.[0]?.timestamps || [];
+                                const shortTimestamps = timestamps.map(ts => ts.split('T')[1]?.split('+')[0] || ts);
+
+                                if (metrics.video_test_active === false && metricsIntervalId) {
+                                    document.getElementById('videoStatus').textContent = 'Status: Video generation completed.';
                                     stopMetricsPolling('Video test finished. Stopping metrics polling.');
                                 }
-                                
-                                // Display CPU (Use backticks consistently)
-                                if (metrics.cpu) {
-                                    html += `<h5>CPU Usage (%)</h5><table><thead><tr>`;
-                                    Object.keys(metrics.cpu).forEach(key => html += `<th>${key}</th>`);
-                                    html += `</tr></thead><tbody><tr>`;
-                                    Object.values(metrics.cpu).forEach(val => html += `<td>${val}</td>`);
-                                    html += `</tr></tbody></table>`;
-                                } else {
-                                    html += `<p>CPU metrics not available.</p>`;
+
+                                if (metrics.cpu && metrics.cpu.data) {
+                                    const chartId = 'cpuChart';
+                                    let canvas = document.getElementById(chartId);
+                                    if (!canvas) {
+                                        metricsDiv.innerHTML += `<div class="chart-container"><h5>CPU Usage (%)</h5><canvas id="${chartId}"></canvas></div>`;
+                                        canvas = document.getElementById(chartId);
+                                    }
+                                    const datasets = [
+                                        { label: '%user', data: metrics.cpu.data['user'] || [], borderColor: 'blue', tension: 0.1 },
+                                        { label: '%system', data: metrics.cpu.data['system'] || [], borderColor: 'red', tension: 0.1 },
+                                        { label: '%idle', data: metrics.cpu.data['idle'] || [], borderColor: 'green', tension: 0.1 }
+                                    ];
+                                    createOrUpdateChart(canvas.getContext('2d'), chartId, shortTimestamps, datasets);
                                 }
 
-                                // Display Memory (Use backticks consistently)
-                                if (metrics.memory) {
-                                    html += `<h5>Memory Usage</h5><table><thead><tr>`;
-                                    Object.keys(metrics.memory).forEach(key => html += `<th>${key}</th>`);
-                                    html += `</tr></thead><tbody><tr>`;
-                                    Object.values(metrics.memory).forEach(val => html += `<td>${val}</td>`);
-                                    html += `</tr></tbody></table>`;
-                                } else {
-                                    html += `<p>Memory metrics not available.</p>`;
+                                if (metrics.memory && metrics.memory.data) {
+                                    const chartId = 'memoryChart';
+                                    let canvas = document.getElementById(chartId);
+                                    if (!canvas) {
+                                        metricsDiv.innerHTML += `<div class="chart-container"><h5>Memory Usage (% Used)</h5><canvas id="${chartId}"></canvas></div>`;
+                                        canvas = document.getElementById(chartId);
+                                    }
+                                    const datasets = [
+                                        { label: '%memused', data: metrics.memory.data['memused'] || [], borderColor: 'purple', tension: 0.1 }
+                                    ];
+                                    createOrUpdateChart(canvas.getContext('2d'), chartId, shortTimestamps, datasets);
                                 }
 
-                                // Display Disk I/O (Already using backticks)
                                 if (metrics.disk && metrics.disk.data) {
-                                    html += `<h5>Disk I/O (${metrics.disk.device || 'N/A'})</h5><table><thead><tr>`;
-                                    Object.keys(metrics.disk.data).forEach(key => html += `<th>${key}</th>`);
-                                    html += `</tr></thead><tbody><tr>`;
-                                    Object.values(metrics.disk.data).forEach(val => html += `<td>${val}</td>`);
-                                    html += `</tr></tbody></table>`;
-                                } else {
-                                    html += `<p>Disk I/O metrics not available.</p>`;
+                                    const chartId = 'diskChart';
+                                    const deviceName = metrics.disk.device || 'N/A';
+                                    let canvas = document.getElementById(chartId);
+                                    if (!canvas) {
+                                        metricsDiv.innerHTML += `<div class="chart-container"><h5>Disk I/O (kB/s) - ${deviceName}</h5><canvas id="${chartId}"></canvas></div>`;
+                                        canvas = document.getElementById(chartId);
+                                    }
+                                    const datasets = [
+                                        { label: 'Read kB/s', data: metrics.disk.data['rkB_s'] || [], borderColor: 'orange', tension: 0.1 },
+                                        { label: 'Write kB/s', data: metrics.disk.data['wkB_s'] || [], borderColor: 'brown', tension: 0.1 }
+                                    ];
+                                    createOrUpdateChart(canvas.getContext('2d'), chartId, shortTimestamps, datasets);
                                 }
 
-                                // Display GPU (Use backticks consistently)
-                                if (metrics.gpu && metrics.gpu.length > 0) {
-                                    html += `<h5>GPU Metrics</h5><table><thead><tr>`;
-                                    // Use headers from the first GPU
-                                    Object.keys(metrics.gpu[0]).forEach(key => html += `<th>${key}</th>`);
-                                    html += `</tr></thead><tbody>`;
-                                    metrics.gpu.forEach(gpu => {
-                                        html += `<tr>`;
-                                        Object.values(gpu).forEach(val => html += `<td>${val}</td>`);
-                                        html += `</tr>`;
+                                if (metrics.gpu && Array.isArray(metrics.gpu)) {
+                                    metrics.gpu.forEach((gpuData, index) => {
+                                        const gpuTimestamps = gpuData.timestamps.map(ts => ts.split('T')[1]?.split('+')[0] || ts);
+
+                                        const utilMemChartId = `gpuUtilMemChart_${index}`;
+                                        let utilMemCanvas = document.getElementById(utilMemChartId);
+                                        if (!utilMemCanvas) {
+                                            metricsDiv.innerHTML += `<div class="chart-container"><h5>GPU ${index} Utilization (%) & Memory (MiB)</h5><canvas id="${utilMemChartId}"></canvas></div>`;
+                                            utilMemCanvas = document.getElementById(utilMemChartId);
+                                        }
+                                        const utilMemDatasets = [
+                                            { label: 'Util [%]', data: gpuData.data['utilization_gpu'] || [], borderColor: 'lime', tension: 0.1, yAxisID: 'yPercent' },
+                                            { label: 'Mem Used [MiB]', data: gpuData.data['memory_used'] || [], borderColor: 'cyan', tension: 0.1, yAxisID: 'yMiB' }
+                                        ];
+                                        createOrUpdateChart(utilMemCanvas.getContext('2d'), utilMemChartId, gpuTimestamps, utilMemDatasets);
+
+                                        const tempPowerChartId = `gpuTempPowerChart_${index}`;
+                                        let tempPowerCanvas = document.getElementById(tempPowerChartId);
+                                        if (!tempPowerCanvas) {
+                                            metricsDiv.innerHTML += `<div class="chart-container"><h5>GPU ${index} Temp (°C) & Power (W)</h5><canvas id="${tempPowerChartId}"></canvas></div>`;
+                                            tempPowerCanvas = document.getElementById(tempPowerChartId);
+                                        }
+                                        const tempPowerDatasets = [
+                                            { label: 'Temp [°C]', data: gpuData.data['temperature_gpu'] || [], borderColor: 'magenta', tension: 0.1 },
+                                            { label: 'Power [W]', data: gpuData.data['power_draw'] || [], borderColor: 'gold', tension: 0.1 }
+                                        ];
+                                        createOrUpdateChart(tempPowerCanvas.getContext('2d'), tempPowerChartId, gpuTimestamps, tempPowerDatasets);
                                     });
-                                    html += `</tbody></table>`;
-                                } else {
-                                    html += `<p>GPU metrics not available.</p>`;
                                 }
 
-                                metricsDiv.innerHTML = html;
-
-                                // Removed brittle check based on status text
-                                // if (document.getElementById('videoStatus').textContent.includes('completed') || document.getElementById('videoStatus').textContent.includes('Error')) { 
-                                //    stopMetricsPolling();
-                                // }
                             })
                             .catch(error => {
                                 console.error('Error fetching metrics:', error);
@@ -202,7 +237,7 @@
                     function startIperfServer() {
                         document.getElementById('networkStatus').textContent = 'Status: Starting iPerf3 server...';
                         fetch('/api/start-iperf')
-                            .then(response => response.json()) // Expect JSON
+                            .then(response => response.json())
                             .then(data => {
                                 document.getElementById('networkStatus').textContent = 'Status: ' + data.message;
                                 document.getElementById('startIperfButton').disabled = (data.status === 'started');
@@ -232,9 +267,10 @@
                             });
                     }
 
-                    // Update video list every 30 seconds
+                    metricsIntervalId = setInterval(updateMetricsDisplay, 3000);
+                    updateMetricsDisplay();
                     setInterval(updateVideoList, 30000);
-                    updateVideoList(); // Initial update
+                    updateVideoList();
                 </script>
             </body>
         </html> 

@@ -60,6 +60,11 @@ cd /workspace/scripts
 node router.js > /workspace/data/logs/router.log 2>&1 &
 wait_for_service localhost 8083 "Router App" || exit 1 # Changed port from 8082 to 8083
 
+# Start metrics collection in the background
+echo "=== Starting Metrics Collection ==="
+/workspace/scripts/collect_metrics.sh > /workspace/data/logs/metrics_script.log 2>&1 &
+METRICS_PID=$!
+echo "Metrics collection started (PID: $METRICS_PID)"
         
 # Start NGINX (config already checked)
 echo "=== Starting NGINX ==="
@@ -82,11 +87,23 @@ if [ "$ALL_SERVICES_STARTED" = true ]; then
     # echo "Prometheus available at http://localhost:8888/prometheus/"
     # echo "Grafana available at http://localhost:8888/grafana/"
 
-    # Keep container running and show logs
-    echo "=== Tailing application logs ==="
-    # tail -f /workspace/data/logs/*.log
-    # Updated tail command to only include relevant logs:
-    tail -f /workspace/data/logs/app.log /workspace/data/logs/router.log /workspace/data/logs/nginx*.log /workspace/data/logs/startup_debug.log
+    # Run the video generation test script in the foreground
+    echo "=== Starting Video Generation Test Suite ==="
+    python /workspace/scripts/video_generation_test.py
+    TEST_EXIT_CODE=$?
+    echo "=== Video Generation Test Suite Finished (Exit Code: $TEST_EXIT_CODE) ==="
+    
+    # Optionally kill metrics collector after test finishes
+    echo "Stopping metrics collection (PID: $METRICS_PID)..."
+    kill $METRICS_PID
+    wait $METRICS_PID 2>/dev/null
+    echo "Metrics collection stopped."
+    
+    # Keep container alive briefly to allow viewing final state/logs if needed, then exit
+    echo "Exiting container shortly..."
+    sleep 10 
+    exit $TEST_EXIT_CODE
+
 else
     echo "!!! Critical service failed to start. Exiting. Check logs above and in /workspace/data/logs/ for details. !!!"
     exit 1
