@@ -83,7 +83,10 @@ RUN git clone https://github.com/pavel4ai/video-wan2.1-docker.git /workspace/tem
 
 # Install all Python dependencies
 RUN pip install -r /workspace/Wan2.1/requirements.txt && \
-    pip install "huggingface_hub[cli]" flash_attn
+    pip install "huggingface_hub[cli]"
+
+ RUN echo "=== Performing final dependency check ===" && \
+    pip install --no-cache-dir packaging torch==2.6 flash_attn -r /workspace/Wan2.1/requirements.txt
 
 # Set up CentML user for security. DO NOT CHANGE USER SETUP
 ARG USERNAME="centml"

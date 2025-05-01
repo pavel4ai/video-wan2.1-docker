@@ -1,5 +1,5 @@
 #!/bin/bash
-#set -x  # Echo every command as it runs
+set -x  # Echo every command as it runs
 #exec > >(tee -a /workspace/data/logs/startup_debug.log) 2>&1
 #echo "=== STARTUP DEBUG LOG ==="
 #date
@@ -65,7 +65,10 @@ echo "=== Starting Metrics Collection ==="
 /workspace/scripts/collect_metrics.sh > /workspace/data/logs/metrics_script.log 2>&1 &
 METRICS_PID=$!
 echo "Metrics collection started (PID: $METRICS_PID)"
-        
+sleep 2 # Give it a moment to start
+echo "Checking if metrics process is running..."
+ps aux | grep collect_metrics.sh | grep -v grep || echo "Metrics process not found!"
+
 # Start NGINX (config already checked)
 echo "=== Starting NGINX ==="
 # Kill any running NGINX process (safe in container)
@@ -79,6 +82,13 @@ fi
 nginx -c /workspace/config/nginx.conf
 wait_for_service localhost 8888 "NGINX" || exit 1 # Exit if NGINX fails
 
+# Start iPerf3 server in the background - REMOVED
+# echo "=== Starting iPerf3 Server (Background) ==="
+# iperf3 -s -p 5201 > /workspace/data/logs/iperf3_server.log 2>&1 &
+# IPERF_PID=$!
+# echo "iPerf3 server started on port 5201 (PID: $IPERF_PID)"
+# # Add a small delay or check? For now, assume it starts quickly.
+
 # Only proceed if all services started
 if [ "$ALL_SERVICES_STARTED" = true ]; then
     echo "=== All services started successfully ===" 
@@ -87,23 +97,28 @@ if [ "$ALL_SERVICES_STARTED" = true ]; then
     # echo "Prometheus available at http://localhost:8888/prometheus/"
     # echo "Grafana available at http://localhost:8888/grafana/"
 
-    # Run the video generation test script in the foreground
-    echo "=== Starting Video Generation Test Suite ==="
-    python /workspace/scripts/video_generation_test.py
-    TEST_EXIT_CODE=$?
-    echo "=== Video Generation Test Suite Finished (Exit Code: $TEST_EXIT_CODE) ==="
-    
-    # Optionally kill metrics collector after test finishes
-    echo "Stopping metrics collection (PID: $METRICS_PID)..."
-    kill $METRICS_PID
-    wait $METRICS_PID 2>/dev/null
-    echo "Metrics collection stopped."
-    
-    # Keep container alive briefly to allow viewing final state/logs if needed, then exit
-    echo "Exiting container shortly..."
-    sleep 10 
-    exit $TEST_EXIT_CODE
+    # Run the video generation test script in the background
+    echo "=== Starting Video Generation Test in Background ==="
+    python3 /workspace/scripts/video_generation_test.py > /workspace/data/logs/video_generation.log 2>&1 &
+    VIDEO_TEST_PID=$!
+    echo "Video generation test started (PID: $VIDEO_TEST_PID)"
 
+    # Removed tail -f command
+    # Instead, run nginx in the foreground to keep the container alive
+    echo "=== Starting Nginx in Foreground ==="
+    nginx -g 'daemon off;' -c /workspace/config/nginx.conf
+
+    # Original logic that waited for video test and then exited is removed
+    # wait $VIDEO_TEST_PID
+    # TEST_EXIT_CODE=$?
+    # echo "Video generation test finished with exit code: $TEST_EXIT_CODE"
+    # echo "Cleaning up background processes..."
+    # kill $TAIL_PID
+    # kill $METRICS_PID
+    # kill $VIDEO_TEST_PID
+    # wait
+    # echo "Exiting container."
+    # exit $TEST_EXIT_CODE
 else
     echo "!!! Critical service failed to start. Exiting. Check logs above and in /workspace/data/logs/ for details. !!!"
     exit 1

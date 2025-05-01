@@ -23,45 +23,15 @@
                     <div id="videoStatus" class="status">Status: Test running automatically...</div>
                 </div>
                 <div class="network-test-section">
-                    <h2>Network Tests</h2>
-                    <div class="test-instructions">
-                        <h3>iPerf3 Testing Instructions</h3>
-                        <p>The iPerf3 server is running on port 5201. Follow these steps to run network tests from your client:</p>
-                        
-                        <div class="test-type">1. Basic Bandwidth Test (30 seconds):</div>
-                        <div class="command-block">
-                            iperf3 -c YOUR_SERVER_IP -p 5201 -t 30 -i 1
-                        </div>
-
-                        <div class="test-type">2. Bidirectional Test:</div>
-                        <div class="command-block">
-                            iperf3 -c YOUR_SERVER_IP -p 5201 -t 30 -i 1 --bidir
-                        </div>
-
-                        <div class="test-type">3. UDP Test with Jitter Measurement:</div>
-                        <div class="command-block">
-                            iperf3 -c YOUR_SERVER_IP -p 5201 -u -b 100M -t 30 -i 1
-                        </div>
-
-                        <div class="test-type">4. Multiple Parallel Connections Test:</div>
-                        <div class="command-block">
-                            iperf3 -c YOUR_SERVER_IP -p 5201 -P 4 -t 30 -i 1
-                        </div>
-
-                        <p>Replace YOUR_SERVER_IP with the IP address or hostname of this server.</p>
-                        <p>Test Parameters:</p>
-                        <ul>
-                            <li><code>-t 30</code>: Run test for 30 seconds</li>
-                            <li><code>-i 1</code>: Output statistics every 1 second</li>
-                            <li><code>-u</code>: Use UDP instead of TCP</li>
-                            <li><code>-b 100M</code>: Target bandwidth of 100 Mbits/sec (UDP)</li>
-                            <li><code>-P 4</code>: Use 4 parallel connections</li>
-                            <li><code>--bidir</code>: Bidirectional test</li>
-                        </ul>
+                    <h2>HTTP Speed Test</h2>
+                    <button id="startSpeedTestButton" onclick="runSpeedTest()">Start Speed Test</button>
+                    <div id="speedTestStatus" class="status">Status: Ready</div>
+                    <div class="test-results">
+                        <div>Ping: <span id="pingResult">---</span> ms</div>
+                        <div>Jitter: <span id="jitterResult">---</span> ms</div>
+                        <div>Download: <span id="downloadResult">---</span> Mbps</div>
+                        <div>Upload: <span id="uploadResult">---</span> Mbps</div>
                     </div>
-                    <button id="startIperfButton" onclick="startIperfServer()">Start iPerf3 Server</button>
-                    <div id="networkStatus" class="status">Status: Ready</div>
-                    <div id="networkResults" class="test-results"></div>
                 </div>
                 <div>
                     <h2>System Performance Monitoring</h2>
@@ -234,20 +204,112 @@
                             });
                     }
 
-                    function startIperfServer() {
-                        document.getElementById('networkStatus').textContent = 'Status: Starting iPerf3 server...';
-                        fetch('/api/start-iperf')
-                            .then(response => response.json())
-                            .then(data => {
-                                document.getElementById('networkStatus').textContent = 'Status: ' + data.message;
-                                document.getElementById('startIperfButton').disabled = (data.status === 'started');
-                            })
-                            .catch(error => {
-                                document.getElementById('networkStatus').textContent = 'Status: Error starting iPerf3 - ' + error;
-                            });
+                    function updateStatus(message) {
+                        document.getElementById('speedTestStatus').textContent = `Status: ${message}`;
                     }
 
-                    function updateVideoList() {
+                    async function measurePing(samples = 10) {
+                        updateStatus('Testing latency...');
+                        let rtts = [];
+                        const endpoint = '/api/speedtest/ping';
+                        for (let i = 0; i < samples; i++) {
+                            const start = performance.now();
+                            try {
+                                await fetch(endpoint, { cache: 'no-store' }); // Prevent caching
+                                const end = performance.now();
+                                rtts.push(end - start);
+                            } catch (e) {
+                                console.error(`Ping ${i+1} failed:`, e);
+                                // Optionally skip this sample or throw error
+                            }
+                            await new Promise(resolve => setTimeout(resolve, 50)); // Small delay between pings
+                        }
+
+                        if (rtts.length === 0) throw new Error('Ping test failed completely.');
+
+                        rtts.sort((a, b) => a - b);
+                        const minPing = rtts[0];
+                        const avgPing = rtts.reduce((a, b) => a + b, 0) / rtts.length;
+                        
+                        // Calculate jitter (standard deviation)
+                        const mean = avgPing;
+                        const variance = rtts.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / rtts.length;
+                        const jitter = Math.sqrt(variance);
+                        
+                        document.getElementById('pingResult').textContent = minPing.toFixed(2);
+                        document.getElementById('jitterResult').textContent = jitter.toFixed(2);
+                        updateStatus('Latency test complete.');
+                        return { ping: minPing, jitter: jitter };
+                    }
+
+                    async function measureDownload(endpoint = '/api/speedtest/download') {
+                        updateStatus('Testing download speed...');
+                        const start = performance.now();
+                        try {
+                            const response = await fetch(endpoint, { cache: 'no-store' });
+                            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+                            const data = await response.blob(); // Ensure full download
+                            const end = performance.now();
+                            const durationSeconds = (end - start) / 1000;
+                            const sizeBytes = data.size;
+                            if (durationSeconds === 0 || sizeBytes === 0) throw new Error('Download test returned no data or took zero time.');
+                            const speedMbps = (sizeBytes * 8) / (durationSeconds * 1000 * 1000);
+                            document.getElementById('downloadResult').textContent = speedMbps.toFixed(2);
+                            updateStatus('Download test complete.');
+                            return speedMbps;
+                        } catch (e) {
+                            document.getElementById('downloadResult').textContent = 'Error';
+                            throw new Error(`Download test failed: ${e.message}`);
+                        }
+                    }
+
+                    async function measureUpload(sizeMB = 10, endpoint = '/api/speedtest/upload') {
+                        updateStatus('Testing upload speed...');
+                        const sizeBytes = sizeMB * 1024 * 1024;
+                        const data = new Blob([new ArrayBuffer(sizeBytes)], {type: 'application/octet-stream'}); // Create blob
+                        const start = performance.now();
+                        try {
+                            const response = await fetch(endpoint, { 
+                                method: 'POST', 
+                                body: data, 
+                                cache: 'no-store' 
+                            });
+                            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+                            const end = performance.now();
+                            const durationSeconds = (end - start) / 1000;
+                             if (durationSeconds === 0) throw new Error('Upload test took zero time.');
+                            const speedMbps = (sizeBytes * 8) / (durationSeconds * 1000 * 1000);
+                            document.getElementById('uploadResult').textContent = speedMbps.toFixed(2);
+                             updateStatus('Upload test complete.');
+                            return speedMbps;
+                        } catch (e) {
+                            document.getElementById('uploadResult').textContent = 'Error';
+                            throw new Error(`Upload test failed: ${e.message}`);
+                        }
+                    }
+
+                    async function runSpeedTest() {
+                        document.getElementById('startSpeedTestButton').disabled = true;
+                        document.getElementById('pingResult').textContent = '---';
+                        document.getElementById('jitterResult').textContent = '---';
+                        document.getElementById('downloadResult').textContent = '---';
+                        document.getElementById('uploadResult').textContent = '---';
+                        
+                        try {
+                            await measurePing();
+                            await measureDownload();
+                            await measureUpload();
+                            updateStatus('Speed test finished.');
+                        } catch (error) {
+                            console.error('Speed test error:', error);
+                            updateStatus(`Test failed: ${error.message}`);
+                        } finally {
+                            document.getElementById('startSpeedTestButton').disabled = false;
+                        }
+                    }
+
+                    // Fetch videos
+                    async function updateVideoList() {
                         fetch('/api/videos')
                             .then(response => response.json())
                             .then(videos => {

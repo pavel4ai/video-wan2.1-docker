@@ -28,6 +28,7 @@ app.get('/', async (req, res) => {
 
 // API endpoints
 app.get('/api/metrics', async (req, res) => {
+    console.log('API: Received /api/metrics request.');
     const metrics = {
         cpu: null,
         memory: null,
@@ -36,11 +37,18 @@ app.get('/api/metrics', async (req, res) => {
     };
 
     try {
+        console.log('API: Attempting to read CPU metrics...');
         metrics.cpu = await parseLastNLinesCsv('/workspace/data/metrics/cpu_usage.csv', NUM_DATAPOINTS);
+        console.log('API: CPU metrics result:', metrics.cpu ? `${metrics.cpu.timestamps?.length || 0} points` : 'null');
+
+        console.log('API: Attempting to read Memory metrics...');
         metrics.memory = await parseLastNLinesCsv('/workspace/data/metrics/memory_usage.csv', NUM_DATAPOINTS);
+        console.log('API: Memory metrics result:', metrics.memory ? `${metrics.memory.timestamps?.length || 0} points` : 'null');
 
         // Disk requires extracting device name from header
+        console.log('API: Attempting to read Disk metrics...');
         const diskRaw = await parseLastNLinesCsv('/workspace/data/metrics/disk_io.csv', NUM_DATAPOINTS);
+        console.log('API: Raw Disk metrics result:', diskRaw ? `${diskRaw.timestamps?.length || 0} points` : 'null');
         if (diskRaw && diskRaw.headers.length > 0) {
             let deviceName = 'unknown';
             const deviceHeader = diskRaw.headers.find(h => h.includes('(device:'));
@@ -56,7 +64,9 @@ app.get('/api/metrics', async (req, res) => {
         }
 
         // GPU requires grouping by GPU index
+        console.log('API: Attempting to read GPU metrics...');
         const gpuRaw = await parseLastNLinesCsv('/workspace/data/metrics/gpu_metrics.csv', NUM_DATAPOINTS * 4); // Read more lines initially to ensure we capture all GPUs in last N samples
+        console.log('API: Raw GPU metrics result:', gpuRaw ? `${gpuRaw.timestamps?.length || 0} points` : 'null');
         if (gpuRaw && gpuRaw.data['gpu_index']) {
              const numGpus = Math.max(...gpuRaw.data['gpu_index']) + 1; // Find highest index + 1
              const numSamples = gpuRaw.data['gpu_index'].length;
@@ -94,40 +104,8 @@ app.get('/api/metrics', async (req, res) => {
         // Allow partial results if some files fail
     }
 
+    console.log(`API: Sending metrics response (CPU: ${!!metrics.cpu}, Mem: ${!!metrics.memory}, Disk: ${!!metrics.disk}, GPU: ${Array.isArray(metrics.gpu) ? metrics.gpu.length : 'null'})`);
     res.json(metrics);
-});
-
-// Start iPerf3 Server
-app.get('/api/start-iperf', (req, res) => {
-    if (iperfProcess) {
-        console.log('API: iPerf3 server already running.');
-        return res.status(400).json({ status: 'error', message: 'iPerf3 server already running.' });
-    }
-
-    console.log('API: Starting iPerf3 server...');
-    iperfProcess = spawn('iperf3', ['-s', '-p', '5201'], {
-        cwd: '/workspace',
-        stdio: 'pipe'
-    });
-
-    iperfProcess.stdout.on('data', (data) => console.log(`iPerf3 stdout: ${data.toString().trim()}`));
-    iperfProcess.stderr.on('data', (data) => console.error(`iPerf3 stderr: ${data.toString().trim()}`));
-
-    iperfProcess.on('error', (err) => {
-        console.error('API: Failed to start iPerf3 server:', err);
-        iperfProcess = null; // Clear reference
-        res.status(500).json({ status: 'error', message: 'Failed to start iPerf3 server.' });
-    });
-
-    iperfProcess.on('close', (code) => {
-        console.log(`API: iPerf3 server process exited (PID: ${iperfProcess?.pid}) with code ${code}.`);
-        iperfProcess = null; // Clear reference on exit
-    });
-    
-    iperfProcess.on('spawn', () => {
-        console.log(`API: iPerf3 server started (PID: ${iperfProcess.pid}).`);
-        res.json({ status: 'started', message: 'iPerf3 server started on port 5201.' });
-    });
 });
 
 // List Videos
@@ -145,8 +123,72 @@ app.get('/api/videos', async (req, res) => { // Use async/await
     }
 });
 
+// --- Speed Test Endpoints ---
+
+// Simple ping endpoint
+app.get('/api/speedtest/ping', (req, res) => {
+    res.sendStatus(200); // Respond immediately
+});
+
+// Download endpoint - streams a fixed amount of data
+const DOWNLOAD_SIZE_MB = 50;
+const DOWNLOAD_CHUNK_SIZE = 1024 * 1024; // 1MB chunks
+const DOWNLOAD_TOTAL_SIZE = DOWNLOAD_SIZE_MB * 1024 * 1024;
+app.get('/api/speedtest/download', (req, res) => {
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Length', DOWNLOAD_TOTAL_SIZE);
+    // Prevent caching
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    const chunk = Buffer.alloc(DOWNLOAD_CHUNK_SIZE, '0'); // Efficiently create a buffer of zeros
+    let bytesSent = 0;
+
+    function sendChunk() {
+        if (bytesSent >= DOWNLOAD_TOTAL_SIZE) {
+            res.end();
+            return;
+        }
+
+        const remaining = DOWNLOAD_TOTAL_SIZE - bytesSent;
+        const sizeToSend = Math.min(DOWNLOAD_CHUNK_SIZE, remaining);
+        const chunkToSend = (sizeToSend === DOWNLOAD_CHUNK_SIZE) ? chunk : Buffer.alloc(sizeToSend, '0');
+
+        if (res.write(chunkToSend)) {
+            bytesSent += sizeToSend;
+            // If write buffer is not full, continue immediately (or use setImmediate for fairness)
+            setImmediate(sendChunk); 
+        } else {
+            // If write buffer is full, wait for drain event
+            bytesSent += sizeToSend;
+            res.once('drain', sendChunk);
+        }
+    }
+
+    sendChunk(); // Start sending
+});
+
+// Upload endpoint - receives data and discards it
+app.post('/api/speedtest/upload', (req, res) => {
+    let bytesReceived = 0;
+    req.on('data', (chunk) => {
+        bytesReceived += chunk.length;
+        // Do nothing with the chunk, just count it
+    });
+    req.on('end', () => {
+        console.log(`Speed Test: Upload received ${bytesReceived} bytes.`);
+        res.sendStatus(200);
+    });
+    req.on('error', (err) => {
+        console.error('Speed Test: Upload error:', err);
+        res.status(500).send('Upload error');
+    });
+});
+
 // --- Helper function to parse last N lines of CSV data ---
 async function parseLastNLinesCsv(filePath, N) {
+    console.log(`Helper: Reading ${filePath}`);
     try {
         const data = await fs.readFile(filePath, 'utf-8');
         const lines = data.trim().split('\n');
@@ -189,7 +231,7 @@ async function parseLastNLinesCsv(filePath, N) {
         return result;
     } catch (error) {
         if (error.code !== 'ENOENT') { // Ignore file not found initially
-            console.error(`Error reading/parsing ${filePath}:`, error);
+            console.error(`Helper: Error reading/parsing ${filePath}:`, error.message);
         }
         return null; // Return null if file doesn't exist or parsing fails
     }
@@ -204,6 +246,5 @@ app.listen(PORT, () => {
 // Graceful shutdown (only managing iperfProcess now)
 process.on('SIGINT', () => {
     console.log('SIGINT received. Shutting down...');
-    if (iperfProcess) iperfProcess.kill('SIGTERM');
     process.exit(0);
 });
