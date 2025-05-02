@@ -62,64 +62,63 @@ wait_for_service localhost 8083 "Router App" || exit 1 # Changed port from 8082 
 
 # Start metrics collection in the background
 echo "=== Starting Metrics Collection ==="
+chmod +x /workspace/scripts/collect_metrics.sh # Ensure executable
 /workspace/scripts/collect_metrics.sh > /workspace/data/logs/metrics_script.log 2>&1 &
 METRICS_PID=$!
 echo "Metrics collection started (PID: $METRICS_PID)"
-sleep 2 # Give it a moment to start
+sleep 2 # Give it a moment to start and maybe write to log
 echo "Checking if metrics process is running..."
 ps aux | grep collect_metrics.sh | grep -v grep || echo "Metrics process not found!"
+echo "--- Start of metrics_script.log --- "
+head -n 10 /workspace/data/logs/metrics_script.log || echo "Could not read metrics_script.log"
+echo "--- End of metrics_script.log --- "
 
 # Start NGINX (config already checked)
-echo "=== Starting NGINX ==="
+echo "=== Preparing for NGINX Start ==="
 # Kill any running NGINX process (safe in container)
 if pgrep nginx > /dev/null; then
     echo "Killing existing NGINX process..."
     pkill nginx
+    sleep 1 # Give it a moment to die
 fi
 if [ -f "/workspace/data/logs/nginx.pid" ]; then
+    echo "Removing old NGINX pid file..."
     rm -f /workspace/data/logs/nginx.pid
 fi
-nginx -c /workspace/config/nginx.conf
-wait_for_service localhost 8888 "NGINX" || exit 1 # Exit if NGINX fails
 
-# Start iPerf3 server in the background - REMOVED
-# echo "=== Starting iPerf3 Server (Background) ==="
-# iperf3 -s -p 5201 > /workspace/data/logs/iperf3_server.log 2>&1 &
-# IPERF_PID=$!
-# echo "iPerf3 server started on port 5201 (PID: $IPERF_PID)"
-# # Add a small delay or check? For now, assume it starts quickly.
-
-# Only proceed if all services started
+# Only proceed to start video test if other services started
+# The final nginx command will run regardless, keeping the container alive
 if [ "$ALL_SERVICES_STARTED" = true ]; then
-    echo "=== All services started successfully ===" 
-    echo "Web UI & API available at http://localhost:8888/"
-    echo "Video browsing available at http://localhost:8888/videos/"
-    # echo "Prometheus available at http://localhost:8888/prometheus/"
-    # echo "Grafana available at http://localhost:8888/grafana/"
-
+    echo "=== Previous services started successfully, starting video test ===" 
+    
     # Run the video generation test script in the background
     echo "=== Starting Video Generation Test in Background ==="
     python3 /workspace/scripts/video_generation_test.py > /workspace/data/logs/video_generation.log 2>&1 &
     VIDEO_TEST_PID=$!
     echo "Video generation test started (PID: $VIDEO_TEST_PID)"
-
-    # Removed tail -f command
-    # Instead, run nginx in the foreground to keep the container alive
-    echo "=== Starting Nginx in Foreground ==="
-    nginx -g 'daemon off;' -c /workspace/config/nginx.conf
-
-    # Original logic that waited for video test and then exited is removed
-    # wait $VIDEO_TEST_PID
-    # TEST_EXIT_CODE=$?
-    # echo "Video generation test finished with exit code: $TEST_EXIT_CODE"
-    # echo "Cleaning up background processes..."
-    # kill $TAIL_PID
-    # kill $METRICS_PID
-    # kill $VIDEO_TEST_PID
-    # wait
-    # echo "Exiting container."
-    # exit $TEST_EXIT_CODE
 else
-    echo "!!! Critical service failed to start. Exiting. Check logs above and in /workspace/data/logs/ for details. !!!"
-    exit 1
+    echo "!!! Critical background service (Router or Metrics) failed to start. Video test will not run. Starting Nginx anyway. Check logs. !!!"
+    # We still proceed to start Nginx below to keep the container potentially accessible for debugging
 fi
+
+# Start Nginx in the foreground - this MUST be the last command
+echo "=== Starting Nginx in Foreground to keep container running ==="
+nginx -g 'daemon off;' -c /workspace/config/nginx.conf
+
+# Exit code of nginx will be the exit code of the script
+NGINX_EXIT_CODE=$?
+echo "Nginx process ended with exit code: $NGINX_EXIT_CODE"
+
+# Attempt cleanup of background processes if Nginx stops
+# Note: Trap might be more robust, but this is a basic attempt
+echo "Attempting cleanup..."
+if [ -n "$VIDEO_TEST_PID" ] && ps -p $VIDEO_TEST_PID > /dev/null; then
+    echo "Stopping video test (PID: $VIDEO_TEST_PID)..."
+    kill $VIDEO_TEST_PID || echo "Failed to kill video test process"
+fi
+if [ -n "$METRICS_PID" ] && ps -p $METRICS_PID > /dev/null; then
+    echo "Stopping metrics collection (PID: $METRICS_PID)..."
+    kill $METRICS_PID || echo "Failed to kill metrics process"
+fi
+
+exit $NGINX_EXIT_CODE
