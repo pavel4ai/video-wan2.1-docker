@@ -2,18 +2,23 @@
 
 echo "=== Starting model weights download ==="
 
+MODEL_NAME="Wan-AI/Wan2.1-T2V-14B"
+MAX_RETRIES=5
+RETRY_DELAY=10  # seconds
 
- # Download the Hugging Face model weights
-huggingface-cli download Wan-AI/Wan2.1-T2V-14B --local-dir /workspace/Wan2.1/Wan2.1-T2V-14B
+for ((i=1; i<=MAX_RETRIES; i++)); do
+    echo "Attempt $i of $MAX_RETRIES..."
+    huggingface-cli download "$MODEL_NAME" --resume-download
+    if [ $? -eq 0 ]; then
+        echo "Download completed successfully."
+    else
+        echo "Download failed. Retrying in $RETRY_DELAY seconds..."
+        sleep $RETRY_DELAY
+    fi
+done
 
-# Verify the download
-if [ $? -eq 0 ]; then
-    echo "=== Model weights downloaded successfully ==="
-else
-     echo "=== Failed to download model weights  ==="
-     exit 1 # Do not exit on simulated failure during testing
-fi
-
+echo "Download failed after $MAX_RETRIES attempts."
+exit 1
 
 
 echo "=== Executing Test Suite ==="
