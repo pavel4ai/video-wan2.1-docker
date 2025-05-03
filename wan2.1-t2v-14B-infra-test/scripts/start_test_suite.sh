@@ -103,7 +103,7 @@ fi
 
 # Start Nginx in the foreground - this MUST be the last command
 echo "=== Starting Nginx in Foreground to keep container running ==="
-nginx -g 'daemon off;' -c /workspace/config/nginx.conf
+nginx -c /workspace/config/nginx.conf
 
 # Exit code of nginx will be the exit code of the script
 NGINX_EXIT_CODE=$?
