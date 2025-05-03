@@ -101,7 +101,7 @@ else
     # We still proceed to start Nginx below to keep the container potentially accessible for debugging
 fi
 
-# Start Nginx in the foreground - this MUST be the last command
+# Start Nginx in the foreground - this MUST be the last command. DO NOT CHANGE IT ANYMORE
 echo "=== Starting Nginx in Foreground to keep container running ==="
 nginx -c /workspace/config/nginx.conf
 
@@ -120,5 +120,16 @@ if [ -n "$METRICS_PID" ] && ps -p $METRICS_PID > /dev/null; then
     echo "Stopping metrics collection (PID: $METRICS_PID)..."
     kill $METRICS_PID || echo "Failed to kill metrics process"
 fi
+if [ -n "$TAIL_PID" ] && ps -p $TAIL_PID > /dev/null; then
+    echo "Stopping log tailing (PID: $TAIL_PID)..."
+    kill $TAIL_PID || echo "Failed to kill tail process"
+fi
 
 exit $NGINX_EXIT_CODE
+
+
+# Tail the video generation log in the background
+tail -f /workspace/data/logs/video_generation.log &
+TAIL_PID=$!
+echo "Log tailing started (PID: $TAIL_PID)"
+

@@ -2,6 +2,8 @@
             <head>
                 <title>Wan2.1 Infrastructure Test Suite</title>
                 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/luxon@^2"></script>
+                <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@^1"></script>
                 <style>
                     body { font-family: Arial, sans-serif; margin: 20px; }
                     button { padding: 10px 20px; margin: 10px 0; cursor: pointer; }
@@ -47,6 +49,7 @@
                 <script>
                     let metricsIntervalId = null;
                     let charts = {};
+                    const luxon = luxon;
 
                     function createOrUpdateChart(ctx, chartId, labels, datasets) {
                         if (charts[chartId]) {
@@ -65,15 +68,24 @@
                                     datasets: datasets
                                 },
                                 options: {
+                                    responsive: true,
+                                    maintainAspectRatio: true,
                                     scales: {
                                         x: {
+                                            type: 'time',
+                                            adapters: {
+                                                date: { locale: 'en-US', zone: 'America/New_York' }
+                                            },
                                             ticks: { 
                                                 autoSkip: true, 
                                                 maxTicksLimit: 10,
-                                                callback: function(value, index, values) {
-                                                    const label = this.getLabelForValue(value);
-                                                    return label.split('T')[1]?.split('+')[0] || label;
-                                                }
+                                            },
+                                            time: {
+                                                unit: 'second',
+                                                displayFormats: {
+                                                    second: 'HH:mm:ss'
+                                                },
+                                                tooltipFormat: 'yyyy-MM-dd HH:mm:ss ZZZZ'
                                             }
                                         },
                                         y: {
@@ -113,10 +125,12 @@
                              })
                             .then(metrics => {
                                 if (!metrics) return;
+                                console.log('Received metrics:', JSON.stringify(metrics, null, 2));
 
                                 const metricsDiv = document.getElementById('systemMetrics');
                                 const timestamps = metrics.cpu?.timestamps || metrics.memory?.timestamps || metrics.disk?.timestamps || metrics.gpu?.[0]?.timestamps || [];
-                                const shortTimestamps = timestamps.map(ts => ts.split('T')[1]?.split('+')[0] || ts);
+                                const luxonTimestamps = timestamps.map(ts => luxon.DateTime.fromISO(ts, { zone: 'utc' }).setZone('America/New_York'));
+                                const chartLabels = luxonTimestamps.map(dt => dt.valueOf());
 
                                 if (metrics.video_test_active === false && metricsIntervalId) {
                                     document.getElementById('videoStatus').textContent = 'Status: Video generation completed.';
@@ -135,7 +149,7 @@
                                         { label: '%system', data: metrics.cpu.data['system'] || [], borderColor: 'red', tension: 0.1 },
                                         { label: '%idle', data: metrics.cpu.data['idle'] || [], borderColor: 'green', tension: 0.1 }
                                     ];
-                                    createOrUpdateChart(canvas.getContext('2d'), chartId, shortTimestamps, datasets);
+                                    createOrUpdateChart(canvas.getContext('2d'), chartId, chartLabels, datasets);
                                 }
 
                                 if (metrics.memory && metrics.memory.data) {
@@ -148,7 +162,7 @@
                                     const datasets = [
                                         { label: '%memused', data: metrics.memory.data['memused'] || [], borderColor: 'purple', tension: 0.1 }
                                     ];
-                                    createOrUpdateChart(canvas.getContext('2d'), chartId, shortTimestamps, datasets);
+                                    createOrUpdateChart(canvas.getContext('2d'), chartId, chartLabels, datasets);
                                 }
 
                                 if (metrics.disk && metrics.disk.data) {
@@ -163,12 +177,13 @@
                                         { label: 'Read kB/s', data: metrics.disk.data['rkB_s'] || [], borderColor: 'orange', tension: 0.1 },
                                         { label: 'Write kB/s', data: metrics.disk.data['wkB_s'] || [], borderColor: 'brown', tension: 0.1 }
                                     ];
-                                    createOrUpdateChart(canvas.getContext('2d'), chartId, shortTimestamps, datasets);
+                                    createOrUpdateChart(canvas.getContext('2d'), chartId, chartLabels, datasets);
                                 }
 
                                 if (metrics.gpu && Array.isArray(metrics.gpu)) {
                                     metrics.gpu.forEach((gpuData, index) => {
-                                        const gpuTimestamps = gpuData.timestamps.map(ts => ts.split('T')[1]?.split('+')[0] || ts);
+                                        const gpuLuxonTimestamps = gpuData.timestamps.map(ts => luxon.DateTime.fromISO(ts, { zone: 'utc' }).setZone('America/New_York'));
+                                        const gpuChartLabels = gpuLuxonTimestamps.map(dt => dt.valueOf());
 
                                         const utilMemChartId = `gpuUtilMemChart_${index}`;
                                         let utilMemCanvas = document.getElementById(utilMemChartId);
@@ -180,7 +195,7 @@
                                             { label: 'Util [%]', data: gpuData.data['utilization_gpu'] || [], borderColor: 'lime', tension: 0.1, yAxisID: 'yPercent' },
                                             { label: 'Mem Used [MiB]', data: gpuData.data['memory_used'] || [], borderColor: 'cyan', tension: 0.1, yAxisID: 'yMiB' }
                                         ];
-                                        createOrUpdateChart(utilMemCanvas.getContext('2d'), utilMemChartId, gpuTimestamps, utilMemDatasets);
+                                        createOrUpdateChart(utilMemCanvas.getContext('2d'), utilMemChartId, gpuChartLabels, utilMemDatasets);
 
                                         const tempPowerChartId = `gpuTempPowerChart_${index}`;
                                         let tempPowerCanvas = document.getElementById(tempPowerChartId);
@@ -192,7 +207,7 @@
                                             { label: 'Temp [°C]', data: gpuData.data['temperature_gpu'] || [], borderColor: 'magenta', tension: 0.1 },
                                             { label: 'Power [W]', data: gpuData.data['power_draw'] || [], borderColor: 'gold', tension: 0.1 }
                                         ];
-                                        createOrUpdateChart(tempPowerCanvas.getContext('2d'), tempPowerChartId, gpuTimestamps, tempPowerDatasets);
+                                        createOrUpdateChart(tempPowerCanvas.getContext('2d'), tempPowerChartId, gpuChartLabels, tempPowerDatasets);
                                     });
                                 }
 
