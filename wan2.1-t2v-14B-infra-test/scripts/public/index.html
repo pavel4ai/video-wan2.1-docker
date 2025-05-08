@@ -126,8 +126,16 @@
                                 if (!metrics) return;
                                 console.log('Received metrics:', JSON.stringify(metrics, null, 2));
 
-                                const metricsDiv = document.getElementById('systemMetrics');
+                                // Destroy all Chart.js instances before removing canvases
+for (const chartId in charts) {
+    if (charts[chartId]) {
+        charts[chartId].destroy();
+    }
+}
+charts = {};
+const metricsDiv = document.getElementById('systemMetrics');
 metricsDiv.innerHTML = '';
+
                                 const timestamps = metrics.cpu?.timestamps || metrics.memory?.timestamps || metrics.disk?.timestamps || metrics.gpu?.[0]?.timestamps || [];
                                 const luxonTimestamps = timestamps.map(ts => luxon.DateTime.fromISO(ts, { zone: 'utc' }).setZone('America/New_York'));
                                 const chartLabels = luxonTimestamps.map(dt => dt.valueOf());
