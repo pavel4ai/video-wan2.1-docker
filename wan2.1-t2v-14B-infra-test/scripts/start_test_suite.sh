@@ -103,7 +103,7 @@ fi
 
 # Start Nginx in the foreground - this MUST be the last command. DO NOT CHANGE IT ANYMORE
 echo "=== Starting Nginx in Foreground to keep container running ==="
-nginx -c /workspace/config/nginx.conf
+nginx -g "daemon off;" -c /workspace/config/nginx.conf
 
 # Tail the video generation log in the background
 tail -f /workspace/data/logs/video_generation.log &
