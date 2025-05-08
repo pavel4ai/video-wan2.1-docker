@@ -26,7 +26,7 @@
                 </div>
                 <div class="network-test-section">
                     <h2>HTTP Speed Test</h2>
-                    <button id="startSpeedTestButton" onclick="runSpeedTest()">Start Speed Test</button>
+                    <button id="startSpeedTestButton">Start Speed Test</button>
                     <div id="speedTestStatus" class="status">Status: Ready</div>
                     <div class="test-results">
                         <div>Ping: <span id="pingResult">---</span> ms</div>
@@ -352,10 +352,13 @@ metricsDiv.innerHTML = '';
                             });
                     }
 
-                    metricsIntervalId = setInterval(updateMetricsDisplay, 3000);
-                    updateMetricsDisplay();
-                    setInterval(updateVideoList, 30000);
-                    updateVideoList();
+                    window.addEventListener('DOMContentLoaded', function() {
+                        document.getElementById('startSpeedTestButton').addEventListener('click', runSpeedTest);
+                        metricsIntervalId = setInterval(updateMetricsDisplay, 3000);
+                        updateMetricsDisplay();
+                        setInterval(updateVideoList, 30000);
+                        updateVideoList();
+                    });
                 </script>
             </body>
-        </html> 
+        </html>
