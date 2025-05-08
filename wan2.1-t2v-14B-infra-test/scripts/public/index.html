@@ -48,10 +48,7 @@
                     <div id="videoList" class="video-list"></div>
                 </div>
 
-                <script>
-                    let metricsIntervalId = null;
-                    let charts = {};
-                    
+
                     function createOrUpdateChart(ctx, chartId, labels, datasets) {
                         if (charts[chartId]) {
                             charts[chartId].data.labels = labels;
@@ -361,6 +358,5 @@ metricsDiv.innerHTML = '';
                         setInterval(updateVideoList, 30000);
                         updateVideoList();
                     });
-                </script>
             </body>
         </html>
