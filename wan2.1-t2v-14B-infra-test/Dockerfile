@@ -36,19 +36,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x -o nodesource_setup.sh && \
     npm install express http-proxy socket.io && \
     rm /workspace/nodesource_setup.sh # Clean up the setup script from workspace dir
 
-#RUN mkdir -p /var/lib/grafana /var/log/grafana && chmod 777 /var/lib/grafana /var/log/grafana
-
-# Install monitoring tools
-#RUN wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz && \
-#    tar xvfz prometheus-2.45.0.linux-amd64.tar.gz && \
-#   mv prometheus-2.45.0.linux-amd64 prometheus && \
-#    wget https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz && \
-#    tar xvfz node_exporter-1.7.0.linux-amd64.tar.gz && \
-#    mv node_exporter-1.7.0.linux-amd64 node_exporter && \
-#    wget https://dl.grafana.com/enterprise/release/grafana-enterprise_11.5.2_amd64.deb && \
-#    apt-get update && apt-get install -y adduser libfontconfig1 musl && \
-#    dpkg -i grafana-enterprise_11.5.2_amd64.deb
-
 WORKDIR /workspace
 
 # Set up Python environment and dependencies

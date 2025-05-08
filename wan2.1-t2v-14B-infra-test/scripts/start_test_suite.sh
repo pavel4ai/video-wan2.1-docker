@@ -105,29 +105,6 @@ fi
 echo "=== Starting Nginx in Foreground to keep container running ==="
 nginx -c /workspace/config/nginx.conf
 
-# Exit code of nginx will be the exit code of the script
-NGINX_EXIT_CODE=$?
-echo "Nginx process ended with exit code: $NGINX_EXIT_CODE"
-
-# Attempt cleanup of background processes if Nginx stops
-# Note: Trap might be more robust, but this is a basic attempt
-echo "Attempting cleanup..."
-if [ -n "$VIDEO_TEST_PID" ] && ps -p $VIDEO_TEST_PID > /dev/null; then
-    echo "Stopping video test (PID: $VIDEO_TEST_PID)..."
-    kill $VIDEO_TEST_PID || echo "Failed to kill video test process"
-fi
-if [ -n "$METRICS_PID" ] && ps -p $METRICS_PID > /dev/null; then
-    echo "Stopping metrics collection (PID: $METRICS_PID)..."
-    kill $METRICS_PID || echo "Failed to kill metrics process"
-fi
-if [ -n "$TAIL_PID" ] && ps -p $TAIL_PID > /dev/null; then
-    echo "Stopping log tailing (PID: $TAIL_PID)..."
-    kill $TAIL_PID || echo "Failed to kill tail process"
-fi
-
-exit $NGINX_EXIT_CODE
-
-
 # Tail the video generation log in the background
 tail -f /workspace/data/logs/video_generation.log &
 TAIL_PID=$!
