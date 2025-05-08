@@ -101,12 +101,12 @@ else
     # We still proceed to start Nginx below to keep the container potentially accessible for debugging
 fi
 
-# Start Nginx in the foreground - this MUST be the last command. DO NOT CHANGE IT ANYMORE
 echo "=== Starting Nginx in Foreground to keep container running ==="
-nginx -g "daemon off;" -c /workspace/config/nginx.conf
+nginx -g "daemon off;" -c /workspace/config/nginx.conf &
 
-# Tail the video generation log in the background
+NGINX_PID=$!
+echo "Log tailing started"
 tail -f /workspace/data/logs/video_generation.log &
-TAIL_PID=$!
-echo "Log tailing started (PID: $TAIL_PID)"
+
+wait $NGINX_PID
 
