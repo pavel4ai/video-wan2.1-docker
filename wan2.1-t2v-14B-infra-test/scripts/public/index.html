@@ -49,8 +49,7 @@
                 <script>
                     let metricsIntervalId = null;
                     let charts = {};
-                    const luxon = luxon;
-
+                    
                     function createOrUpdateChart(ctx, chartId, labels, datasets) {
                         if (charts[chartId]) {
                             charts[chartId].data.labels = labels;
