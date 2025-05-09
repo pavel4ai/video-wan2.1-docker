@@ -70,6 +70,7 @@ while true; do
 
     # Collect GPU stats (nvidia-smi)
     # Query specific metrics, format as CSV, handle multiple GPUs
+    # Enhanced to include all required metrics
     nvidia-smi --query-gpu=index,utilization.gpu,memory.total,memory.used,memory.free,temperature.gpu,power.draw --format=csv,noheader,nounits | awk -v ts="$TIMESTAMP" 'BEGIN{OFS=","} {printf "%s,%s\n", ts, $0}' >> "$GPU_LOG"
 
     sleep "$INTERVAL"

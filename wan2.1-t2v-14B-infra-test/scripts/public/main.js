@@ -204,6 +204,10 @@ function updateMetricsDisplay() {
                         console.log(`GPU ${index} data fields:`, Object.keys(gpu.data));
                         Object.keys(gpu.data).forEach(key => {
                             console.log(`GPU ${index} ${key} data points:`, gpu.data[key].length);
+                            // Log a sample value to verify data format
+                            if (gpu.data[key].length > 0) {
+                                console.log(`GPU ${index} ${key} sample value:`, gpu.data[key][0]);
+                            }
                         });
                     } else {
                         console.log(`GPU ${index} has no data object`);
@@ -546,8 +550,8 @@ function createMetricsCharts(container, metrics, chartLabels) {
             createCanvas('systemMetrics', utilMemCanvasId, `GPU ${index} Utilization (%) & Memory (MiB) - Last 60 Minutes`);
             
             // Check if utilization_gpu and memory_used data exists
-            const hasUtilData = gpuData.data['utilization_gpu'] && gpuData.data['utilization_gpu'].length > 0;
-            const hasMemData = gpuData.data['memory_used'] && gpuData.data['memory_used'].length > 0;
+            const hasUtilData = gpuData.data['utilization_gpu_'] && gpuData.data['utilization_gpu_'].length > 0;
+            const hasMemData = gpuData.data['memory_used_MiB_'] && gpuData.data['memory_used_MiB_'].length > 0;
             
             console.log(`GPU ${index} utilization data available:`, hasUtilData);
             console.log(`GPU ${index} memory data available:`, hasMemData);
@@ -557,7 +561,7 @@ function createMetricsCharts(container, metrics, chartLabels) {
             if (hasUtilData) {
                 utilMemDatasets.push({ 
                     label: 'Util [%]', 
-                    data: gpuData.data['utilization_gpu'], 
+                    data: gpuData.data['utilization_gpu_'], 
                     borderColor: 'lime', 
                     tension: 0.1, 
                     yAxisID: 'yPercent' 
@@ -567,7 +571,7 @@ function createMetricsCharts(container, metrics, chartLabels) {
             if (hasMemData) {
                 utilMemDatasets.push({ 
                     label: 'Mem Used [MiB]', 
-                    data: gpuData.data['memory_used'], 
+                    data: gpuData.data['memory_used_MiB_'], 
                     borderColor: 'cyan', 
                     tension: 0.1, 
                     yAxisID: 'yMiB' 
@@ -624,8 +628,8 @@ function createMetricsCharts(container, metrics, chartLabels) {
             createCanvas('systemMetrics', tempPowerCanvasId, `GPU ${index} Temp (°C) & Power (W) - Last 60 Minutes`);
             
             // Check if temperature_gpu and power_draw data exists
-            const hasTempData = gpuData.data['temperature_gpu'] && gpuData.data['temperature_gpu'].length > 0;
-            const hasPowerData = gpuData.data['power_draw'] && gpuData.data['power_draw'].length > 0;
+            const hasTempData = gpuData.data['temperature_gpu_C_'] && gpuData.data['temperature_gpu_C_'].length > 0;
+            const hasPowerData = gpuData.data['power_draw_W_'] && gpuData.data['power_draw_W_'].length > 0;
             
             console.log(`GPU ${index} temperature data available:`, hasTempData);
             console.log(`GPU ${index} power data available:`, hasPowerData);
@@ -635,7 +639,7 @@ function createMetricsCharts(container, metrics, chartLabels) {
             if (hasTempData) {
                 tempPowerDatasets.push({ 
                     label: 'Temp [°C]', 
-                    data: gpuData.data['temperature_gpu'], 
+                    data: gpuData.data['temperature_gpu_C_'], 
                     borderColor: 'magenta', 
                     tension: 0.1 
                 });
@@ -644,7 +648,7 @@ function createMetricsCharts(container, metrics, chartLabels) {
             if (hasPowerData) {
                 tempPowerDatasets.push({ 
                     label: 'Power [W]', 
-                    data: gpuData.data['power_draw'], 
+                    data: gpuData.data['power_draw_W_'], 
                     borderColor: 'gold', 
                     tension: 0.1 
                 });
