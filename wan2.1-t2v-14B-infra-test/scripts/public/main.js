@@ -1,30 +1,108 @@
+console.log('main.js loaded at', new Date().toISOString());
+
 let metricsIntervalId = null;
 let charts = {};
 
+// Debug function to log detailed information about an object
+function debugLog(label, obj) {
+    console.log(`DEBUG [${label}]:`, obj);
+    if (typeof obj === 'object' && obj !== null) {
+        console.log(`DEBUG [${label}] type:`, Object.prototype.toString.call(obj));
+        console.log(`DEBUG [${label}] keys:`, Object.keys(obj));
+        try {
+            console.log(`DEBUG [${label}] stringified:`, JSON.stringify(obj));
+        } catch (e) {
+            console.log(`DEBUG [${label}] cannot stringify:`, e.message);
+        }
+    }
+}
+
 // Helper function to ensure canvas is properly created and sized
 function ensureCanvas(id, container, title) {
+    console.log(`ensureCanvas called for ${id}`);
+    
+    // Check if container exists
+    if (!container) {
+        console.error(`Container for ${id} is null or undefined`);
+        debugLog('container', container);
+        return null;
+    }
+    
     let canvas = document.getElementById(id);
+    console.log(`Canvas element for ${id} exists:`, !!canvas);
+    
     if (!canvas) {
         console.log(`Creating new canvas for ${id}`);
-        container.innerHTML += `<div class="chart-container"><h5>${title}</h5><canvas id="${id}" width="800" height="400"></canvas></div>`;
+        const divHtml = `<div class="chart-container"><h5>${title}</h5><canvas id="${id}" width="800" height="400"></canvas></div>`;
+        console.log(`Adding HTML to container:`, divHtml);
+        
+        // Store original innerHTML for debugging
+        const originalHtml = container.innerHTML;
+        console.log(`Container original HTML length: ${originalHtml.length}`);
+        
+        container.innerHTML += divHtml;
         canvas = document.getElementById(id);
+        
+        console.log(`Canvas created for ${id}:`, !!canvas);
         
         // Force canvas to be visible and sized correctly
         if (canvas) {
+            console.log(`Setting canvas properties for ${id}`);
             canvas.style.display = 'block';
             canvas.width = 800;
             canvas.height = 400;
+            
+            // Verify canvas dimensions
+            console.log(`Canvas dimensions for ${id}: ${canvas.width}x${canvas.height}`);
+            console.log(`Canvas offsetWidth/Height: ${canvas.offsetWidth}x${canvas.offsetHeight}`);
+            console.log(`Canvas client rect:`, canvas.getBoundingClientRect());
+        } else {
+            console.error(`Failed to get canvas element after creation for ${id}`);
+            console.log(`Current container HTML:`, container.innerHTML);
         }
+    } else {
+        console.log(`Using existing canvas for ${id}`);
+        console.log(`Canvas dimensions: ${canvas.width}x${canvas.height}`);
     }
+    
     return canvas;
 }
 
 function createOrUpdateChart(ctx, chartId, labels, datasets) {
-    console.log(`Creating/updating chart: ${chartId}`);
+    console.log(`===== Creating/updating chart: ${chartId} =====`);
     console.log(`- Labels count: ${labels.length}`);
     console.log(`- Datasets count: ${datasets.length}`);
     
+    // Check if Chart constructor exists
+    console.log('Chart constructor exists:', typeof Chart !== 'undefined');
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js is not loaded! Cannot create charts.');
+        return false;
+    }
+    
+    // Verify context
+    if (!ctx) {
+        console.error(`Context for ${chartId} is null or undefined`);
+        return false;
+    }
+    
+    console.log(`Context type for ${chartId}:`, ctx.constructor ? ctx.constructor.name : typeof ctx);
+    
     try {
+        // Check if datasets have data
+        let hasData = false;
+        datasets.forEach((dataset, i) => {
+            console.log(`Dataset ${i} (${dataset.label}) has ${dataset.data.length} data points`);
+            if (dataset.data && dataset.data.length > 0) {
+                hasData = true;
+                console.log(`Sample data points for ${dataset.label}:`, dataset.data.slice(0, 3));
+            }
+        });
+        
+        if (!hasData) {
+            console.warn(`No data available for chart ${chartId}`);
+        }
+        
         if (charts[chartId]) {
             console.log(`Updating existing chart: ${chartId}`);
             charts[chartId].data.labels = labels;
@@ -33,11 +111,21 @@ function createOrUpdateChart(ctx, chartId, labels, datasets) {
                     dataset.data = datasets[index].data;
                 }
             });
+            console.log(`Calling update() on chart ${chartId}`);
             charts[chartId].update('none');
             console.log(`Chart ${chartId} updated successfully`);
         } else {
             console.log(`Creating new chart: ${chartId}`);
-            charts[chartId] = new Chart(ctx, {
+            console.log('Chart configuration:', {
+                type: 'line',
+                data: { 
+                    labels: `${labels.length} items`, 
+                    datasets: `${datasets.length} datasets` 
+                }
+            });
+            
+            try {
+                charts[chartId] = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
@@ -90,20 +178,39 @@ function stopMetricsPolling(message = 'Polling stopped.') {
 }
 
 function updateMetricsDisplay() {
-    console.log('Starting metrics update...');
+    console.log('===== Starting metrics update at', new Date().toISOString(), '=====');
+    
+    // Check if systemMetrics div exists
+    const metricsDiv = document.getElementById('systemMetrics');
+    if (!metricsDiv) {
+        console.error('systemMetrics div not found in DOM');
+        return;
+    }
+    
+    console.log('Fetching metrics from API...');
     fetch('/api/metrics')
         .then(response => {
-            console.log('Fetch response status:', response.status);
+            console.log('Fetch response received:', response.status, response.statusText);
+            console.log('Response headers:', [...response.headers.entries()]);
+            
             if (!response.ok) {
                 if (response.status === 404) {
                     console.log('Metrics endpoint returned 404, assuming test ended.');
-                    document.getElementById('videoStatus').textContent = 'Status: Test ended or metrics unavailable.';
+                    const statusEl = document.getElementById('videoStatus');
+                    if (statusEl) {
+                        statusEl.textContent = 'Status: Test ended or metrics unavailable.';
+                    }
                     stopMetricsPolling('Metrics endpoint 404. Stopping polling.');
                     return null;
                 }
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            return response.json();
+            
+            console.log('Response OK, parsing JSON...');
+            return response.json().catch(err => {
+                console.error('Error parsing JSON response:', err);
+                throw new Error('Failed to parse metrics data: ' + err.message);
+            });
         })
         .then(metrics => {
             if (!metrics) {
@@ -111,32 +218,144 @@ function updateMetricsDisplay() {
                 return;
             }
             console.log('Received metrics data structure:', Object.keys(metrics));
+            
+            // Log detailed metrics information
+            debugLog('metrics', metrics);
+            
             console.log('CPU data present:', !!metrics.cpu);
             console.log('Memory data present:', !!metrics.memory);
             console.log('Disk data present:', !!metrics.disk);
             console.log('GPU data present:', !!metrics.gpu);
             
-            if (metrics.cpu) console.log('CPU data keys:', Object.keys(metrics.cpu));
-            if (metrics.memory) console.log('Memory data keys:', Object.keys(metrics.memory));
-            if (metrics.disk) console.log('Disk data keys:', Object.keys(metrics.disk));
-            if (metrics.gpu) console.log('GPU data length:', metrics.gpu.length);
+            if (metrics.cpu) {
+                console.log('CPU data keys:', Object.keys(metrics.cpu));
+                if (metrics.cpu.data) {
+                    console.log('CPU data fields:', Object.keys(metrics.cpu.data));
+                    for (const [key, values] of Object.entries(metrics.cpu.data)) {
+                        console.log(`CPU ${key} data points:`, values.length, 'Sample:', values.slice(0, 3));
+                    }
+                }
+            }
             
-            // Full metrics for debugging
-            console.log('Received metrics:', JSON.stringify(metrics, null, 2));
+            if (metrics.memory) {
+                console.log('Memory data keys:', Object.keys(metrics.memory));
+                if (metrics.memory.data) {
+                    console.log('Memory data fields:', Object.keys(metrics.memory.data));
+                    for (const [key, values] of Object.entries(metrics.memory.data)) {
+                        console.log(`Memory ${key} data points:`, values.length, 'Sample:', values.slice(0, 3));
+                    }
+                }
+            }
+            
+            if (metrics.disk) {
+                console.log('Disk data keys:', Object.keys(metrics.disk));
+                if (metrics.disk.data) {
+                    console.log('Disk data fields:', Object.keys(metrics.disk.data));
+                    for (const [key, values] of Object.entries(metrics.disk.data)) {
+                        console.log(`Disk ${key} data points:`, values.length, 'Sample:', values.slice(0, 3));
+                    }
+                }
+            }
+            
+            if (metrics.gpu && metrics.gpu.length > 0) {
+                console.log('GPU data length:', metrics.gpu.length);
+                metrics.gpu.forEach((gpu, idx) => {
+                    console.log(`GPU ${idx} data keys:`, Object.keys(gpu));
+                    if (gpu.data) {
+                        console.log(`GPU ${idx} data fields:`, Object.keys(gpu.data));
+                        for (const [key, values] of Object.entries(gpu.data)) {
+                            console.log(`GPU ${idx} ${key} data points:`, values.length, 'Sample:', values.slice(0, 3));
+                        }
+                    }
+                });
+            }
 
+            console.log('Preparing to create/update charts...');
+            
+            // Log current charts
+            console.log('Current charts:', Object.keys(charts));
+            
             // Destroy all Chart.js instances before removing canvases
+            console.log('Destroying existing charts...');
             for (const chartId in charts) {
                 if (charts[chartId]) {
-                    charts[chartId].destroy();
+                    try {
+                        console.log(`Destroying chart ${chartId}`);
+                        charts[chartId].destroy();
+                    } catch (err) {
+                        console.error(`Error destroying chart ${chartId}:`, err);
+                    }
                 }
             }
             charts = {};
+            
+            // Clear metrics container
+            console.log('Clearing metrics container...');
             const metricsDiv = document.getElementById('systemMetrics');
+            if (!metricsDiv) {
+                console.error('systemMetrics div not found!');
+                return;
+            }
+            
+            console.log('Metrics div before clearing:', metricsDiv.childNodes.length, 'children');
             metricsDiv.innerHTML = '';
+            console.log('Metrics div after clearing:', metricsDiv.childNodes.length, 'children');
 
-            const timestamps = metrics.cpu?.timestamps || metrics.memory?.timestamps || metrics.disk?.timestamps || metrics.gpu?.[0]?.timestamps || [];
-            const luxonTimestamps = timestamps.map(ts => luxon.DateTime.fromISO(ts, { zone: 'utc' }).setZone('America/New_York'));
-            const chartLabels = luxonTimestamps.map(dt => dt.valueOf());
+            console.log('Preparing timestamp data...');
+            
+            // Check if luxon is available
+            if (typeof luxon === 'undefined') {
+                console.error('Luxon library is not loaded! Cannot process timestamps.');
+                return;
+            }
+            
+            // Get timestamps from available metrics
+            let timestamps = [];
+            if (metrics.cpu && metrics.cpu.timestamps) {
+                timestamps = metrics.cpu.timestamps;
+                console.log('Using CPU timestamps');
+            } else if (metrics.memory && metrics.memory.timestamps) {
+                timestamps = metrics.memory.timestamps;
+                console.log('Using Memory timestamps');
+            } else if (metrics.disk && metrics.disk.timestamps) {
+                timestamps = metrics.disk.timestamps;
+                console.log('Using Disk timestamps');
+            } else if (metrics.gpu && metrics.gpu[0] && metrics.gpu[0].timestamps) {
+                timestamps = metrics.gpu[0].timestamps;
+                console.log('Using GPU timestamps');
+            } else {
+                console.warn('No timestamps found in any metrics!');
+                timestamps = [];
+            }
+            
+            console.log('Raw timestamps:', timestamps.length, 'Sample:', timestamps.slice(0, 3));
+            
+            // Convert timestamps to Luxon DateTime objects
+            let luxonTimestamps = [];
+            try {
+                luxonTimestamps = timestamps.map(ts => {
+                    try {
+                        return luxon.DateTime.fromISO(ts, { zone: 'utc' }).setZone('America/New_York');
+                    } catch (err) {
+                        console.error('Error parsing timestamp:', ts, err);
+                        return null;
+                    }
+                }).filter(dt => dt !== null);
+                console.log('Luxon timestamps created:', luxonTimestamps.length);
+            } catch (err) {
+                console.error('Error creating Luxon timestamps:', err);
+                luxonTimestamps = [];
+            }
+            
+            // Convert Luxon DateTime objects to millisecond timestamps for Chart.js
+            let chartLabels = [];
+            try {
+                chartLabels = luxonTimestamps.map(dt => dt.valueOf());
+                console.log('Chart labels created:', chartLabels.length, 'Sample:', chartLabels.slice(0, 3));
+            } catch (err) {
+                console.error('Error creating chart labels:', err);
+                chartLabels = [];
+            }
 
             if (metrics.video_test_active === false && metricsIntervalId) {
                 document.getElementById('videoStatus').textContent = 'Status: Video generation completed.';
@@ -148,27 +367,71 @@ function updateMetricsDisplay() {
                 console.log('Processing CPU chart data...');
                 console.log('CPU data fields:', Object.keys(metrics.cpu.data));
                 
+                console.log('===== Creating CPU chart =====');
                 const chartId = 'cpuChart';
+                
+                // Check if metricsDiv exists
+                if (!metricsDiv) {
+                    console.error('metricsDiv is null or undefined');
+                    return;
+                }
+                
+                console.log('Creating canvas for CPU chart...');
                 const canvas = ensureCanvas(chartId, metricsDiv, 'CPU Usage (%)');
                 
                 if (canvas) {
+                    console.log('CPU canvas created successfully');
+                    console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
+                    console.log('Canvas visible:', canvas.style.display !== 'none');
+                    
                     try {
+                        // Prepare datasets
+                        console.log('Preparing CPU datasets...');
+                        const cpuDataFields = metrics.cpu.data ? Object.keys(metrics.cpu.data) : [];
+                        console.log('Available CPU data fields:', cpuDataFields);
+                        
                         const datasets = [
                             { label: '%user', data: metrics.cpu.data['user'] || [], borderColor: 'blue', tension: 0.1 },
                             { label: '%system', data: metrics.cpu.data['system'] || [], borderColor: 'red', tension: 0.1 },
                             { label: '%idle', data: metrics.cpu.data['idle'] || [], borderColor: 'green', tension: 0.1 }
                         ];
-                        console.log('CPU datasets prepared:', datasets.map(d => ({ label: d.label, dataPoints: d.data.length })));
                         
+                        // Log dataset details
+                        datasets.forEach((dataset, i) => {
+                            console.log(`CPU dataset ${i} (${dataset.label}):`, {
+                                dataPoints: dataset.data.length,
+                                sample: dataset.data.slice(0, 3),
+                                borderColor: dataset.borderColor
+                            });
+                        });
+                        
+                        // Get canvas context
+                        console.log('Getting 2D context for CPU canvas...');
                         const ctx = canvas.getContext('2d');
+                        
                         if (ctx) {
-                            createOrUpdateChart(ctx, chartId, chartLabels, datasets);
-                            console.log('CPU chart created/updated');
+                            console.log('CPU canvas context obtained successfully');
+                            
+                            // Create a small test rectangle to verify context works
+                            try {
+                                console.log('Drawing test rectangle on CPU canvas...');
+                                ctx.fillStyle = 'red';
+                                ctx.fillRect(0, 0, 10, 10);
+                                console.log('Test rectangle drawn successfully');
+                            } catch (err) {
+                                console.error('Error drawing test rectangle:', err);
+                            }
+                            
+                            // Create chart
+                            console.log('Creating CPU chart...');
+                            const result = createOrUpdateChart(ctx, chartId, chartLabels, datasets);
+                            console.log('CPU chart creation result:', result);
                         } else {
                             console.error('Failed to get 2D context for CPU canvas');
                         }
                     } catch (err) {
                         console.error('Error creating CPU chart:', err);
+                        console.error('Error stack:', err.stack);
                     }
                 } else {
                     console.error('Failed to create CPU canvas element');
@@ -438,8 +701,80 @@ async function updateVideoList() {
     }
 }
 
+// Check if required libraries are loaded
+function checkDependencies() {
+    console.log('Checking dependencies...');
+    const dependencies = {
+        'Chart': typeof Chart !== 'undefined',
+        'luxon': typeof luxon !== 'undefined',
+        'chartjs-adapter-luxon': typeof Chart !== 'undefined' && 
+                                Chart.adapters && 
+                                Chart.adapters._date && 
+                                Chart.adapters._date.options && 
+                                Chart.adapters._date.options.locale
+    };
+    
+    console.log('Dependencies status:', dependencies);
+    
+    let allLoaded = true;
+    for (const [dep, loaded] of Object.entries(dependencies)) {
+        if (!loaded) {
+            console.error(`Required dependency ${dep} is not loaded!`);
+            allLoaded = false;
+        }
+    }
+    
+    return allLoaded;
+}
+
+// Log all global variables
+function logGlobals() {
+    console.log('Window object keys:', Object.keys(window).length);
+    console.log('Global Chart object:', typeof window.Chart);
+    console.log('Global luxon object:', typeof window.luxon);
+}
+
+// Check DOM structure
+function checkDomStructure() {
+    console.log('Checking DOM structure...');
+    const elements = {
+        'systemMetrics': document.getElementById('systemMetrics'),
+        'videoStatus': document.getElementById('videoStatus'),
+        'speedTestStatus': document.getElementById('speedTestStatus'),
+        'startSpeedTestButton': document.getElementById('startSpeedTestButton'),
+        'videoList': document.getElementById('videoList')
+    };
+    
+    console.log('DOM elements found:', elements);
+    
+    for (const [id, element] of Object.entries(elements)) {
+        if (!element) {
+            console.error(`Required DOM element #${id} not found!`);
+        }
+    }
+    
+    return elements;
+}
+
 window.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM content loaded, initializing dashboard...');
+    console.log('DOM content loaded at', new Date().toISOString());
+    console.log('Initializing dashboard...');
+    
+    // Log browser information
+    console.log('Browser:', navigator.userAgent);
+    console.log('Window dimensions:', window.innerWidth, 'x', window.innerHeight);
+    
+    // Check if required libraries are loaded
+    const dependenciesLoaded = checkDependencies();
+    if (!dependenciesLoaded) {
+        console.error('Some dependencies are missing. Charts may not render correctly.');
+    }
+    
+    // Log global variables
+    logGlobals();
+    
+    // Check DOM structure
+    const domElements = checkDomStructure();
     
     // Add event listener for speed test button
     const speedTestButton = document.getElementById('startSpeedTestButton');
@@ -452,13 +787,32 @@ window.addEventListener('DOMContentLoaded', function() {
     
     // Start metrics polling
     console.log('Starting metrics polling...');
-    updateMetricsDisplay(); // Initial update
-    metricsIntervalId = setInterval(updateMetricsDisplay, 3000);
+    try {
+        updateMetricsDisplay(); // Initial update
+        metricsIntervalId = setInterval(updateMetricsDisplay, 3000);
+        console.log('Metrics polling started with interval ID:', metricsIntervalId);
+    } catch (err) {
+        console.error('Failed to start metrics polling:', err);
+    }
     
     // Start video list polling
     console.log('Starting video list polling...');
-    updateVideoList(); // Initial update
-    setInterval(updateVideoList, 30000);
+    try {
+        updateVideoList(); // Initial update
+        setInterval(updateVideoList, 30000);
+        console.log('Video list polling started');
+    } catch (err) {
+        console.error('Failed to start video list polling:', err);
+    }
     
     console.log('Dashboard initialization complete');
 });
+
+// Add a fallback initialization in case DOMContentLoaded already fired
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    console.log('Document already loaded, running initialization immediately');
+    setTimeout(function() {
+        const event = new Event('DOMContentLoaded');
+        window.dispatchEvent(event);
+    }, 1000);
+}
