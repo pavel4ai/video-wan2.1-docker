@@ -6,10 +6,11 @@ MODEL_NAME="Wan-AI/Wan2.1-T2V-14B"
 MAX_RETRIES=5
 RETRY_DELAY=10  # seconds
 DOWNLOAD_SUCCESS=false # Flag to track success
+WEIGHTS_DIR="/workspace/Wan2.1/Wan2.1-T2V-14B"
 
 for ((i=1; i<=MAX_RETRIES; i++)); do
     echo "Attempt $i of $MAX_RETRIES..."
-    huggingface-cli download "$MODEL_NAME" --resume-download
+    huggingface-cli download "$MODEL_NAME" --local-dir ${WEIGHTS_DIR} --resume-download
     if [ $? -eq 0 ]; then
         echo "Download completed successfully."
         DOWNLOAD_SUCCESS=true
