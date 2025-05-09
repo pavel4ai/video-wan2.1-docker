@@ -67,6 +67,18 @@ app.get('/api/metrics', async (req, res) => {
         console.log('API: Attempting to read GPU metrics...');
         const gpuRaw = await parseLastNLinesCsv('/workspace/data/metrics/gpu_metrics.csv', NUM_DATAPOINTS * 4); // Read more lines initially to ensure we capture all GPUs in last N samples
         console.log('API: Raw GPU metrics result:', gpuRaw ? `${gpuRaw.timestamps?.length || 0} points` : 'null');
+        
+        // Debug the actual headers and field names
+        if (gpuRaw) {
+            console.log('API: GPU CSV headers:', gpuRaw.headers);
+            console.log('API: GPU data fields:', Object.keys(gpuRaw.data));
+            // Log a sample data point for each field
+            Object.keys(gpuRaw.data).forEach(field => {
+                if (gpuRaw.data[field].length > 0) {
+                    console.log(`API: Sample value for ${field}:`, gpuRaw.data[field][0]);
+                }
+            });
+        }
         if (gpuRaw && gpuRaw.data['gpu_index']) {
              const numGpus = Math.max(...gpuRaw.data['gpu_index']) + 1; // Find highest index + 1
              const numSamples = gpuRaw.data['gpu_index'].length;
