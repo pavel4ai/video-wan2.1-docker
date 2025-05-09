@@ -2,25 +2,31 @@
 let metricsIntervalId = null;
 let charts = {};
 
-// Simple debug logger
-function log(message, data) {
-    console.log(`[DEBUG] ${message}`, data || '');
+// Store historical data for 60 minutes
+// Assuming data points come in every 3 seconds, we need to store 1200 points (60*60/3)
+const MAX_DATA_POINTS = 1200;
+let historicalData = {
+    timestamps: [],
+    cpu: { data: {} },
+    memory: { data: {} },
+    disk: { data: {} },
+    gpu: []
+};
+
+// Simple logger for important events
+function log(message) {
+    console.log(`[INFO] ${message}`);
 }
 
 // Initialize the dashboard when the DOM is loaded
 window.addEventListener('DOMContentLoaded', function() {
-    log('DOM content loaded, initializing dashboard...');
+    log('Initializing dashboard');
     
     // Check if Chart.js is loaded
     if (typeof Chart === 'undefined') {
         console.error('Chart.js is not loaded! Charts will not render.');
         document.getElementById('systemMetrics').innerHTML = '<div style="color:red">Error: Chart.js library not loaded</div>';
         return;
-    }
-    
-    // Check if luxon is loaded
-    if (typeof luxon === 'undefined') {
-        console.error('Luxon is not loaded! Time-based charts will not render correctly.');
     }
     
     // Add event listener for speed test button
@@ -47,8 +53,6 @@ window.addEventListener('DOMContentLoaded', function() {
 
 // Create or update a chart
 function createOrUpdateChart(canvasId, chartType, labels, datasets, options) {
-    log(`Creating/updating chart: ${canvasId}`);
-    
     // Get the canvas element
     const canvas = document.getElementById(canvasId);
     if (!canvas) {
@@ -65,13 +69,11 @@ function createOrUpdateChart(canvasId, chartType, labels, datasets, options) {
     
     // Create or update the chart
     if (charts[canvasId]) {
-        log(`Updating existing chart: ${canvasId}`);
         charts[canvasId].data.labels = labels;
         charts[canvasId].data.datasets = datasets;
         charts[canvasId].update();
         return charts[canvasId];
     } else {
-        log(`Creating new chart: ${canvasId}`);
         try {
             charts[canvasId] = new Chart(ctx, {
                 type: chartType,
@@ -81,7 +83,10 @@ function createOrUpdateChart(canvasId, chartType, labels, datasets, options) {
                 },
                 options: options || {
                     responsive: true,
-                    maintainAspectRatio: true
+                    maintainAspectRatio: true,
+                    animation: {
+                        duration: 0 // Disable animations for better performance with large datasets
+                    }
                 }
             });
             return charts[canvasId];
@@ -94,8 +99,6 @@ function createOrUpdateChart(canvasId, chartType, labels, datasets, options) {
 
 // Create a canvas element
 function createCanvas(containerId, canvasId, title) {
-    log(`Creating canvas: ${canvasId} in container: ${containerId}`);
-    
     // Get the container element
     const container = document.getElementById(containerId);
     if (!container) {
@@ -106,7 +109,6 @@ function createCanvas(containerId, canvasId, title) {
     // Check if canvas already exists
     let canvas = document.getElementById(canvasId);
     if (canvas) {
-        log(`Canvas ${canvasId} already exists`);
         return canvas;
     }
     
@@ -134,21 +136,15 @@ function createCanvas(containerId, canvasId, title) {
     // Add the chart div to the container
     container.appendChild(chartDiv);
     
-    log(`Canvas ${canvasId} created successfully`);
     return canvas;
 }
 
 // Update the metrics display
 function updateMetricsDisplay() {
-    log('Fetching metrics data...');
-    
     fetch('/api/metrics')
         .then(response => {
-            log(`Fetch response status: ${response.status}`);
-            
             if (!response.ok) {
                 if (response.status === 404) {
-                    log('Metrics endpoint returned 404, assuming test ended.');
                     document.getElementById('videoStatus').textContent = 'Status: Test ended or metrics unavailable.';
                     stopMetricsPolling('Metrics endpoint 404. Stopping polling.');
                     return null;
@@ -160,11 +156,11 @@ function updateMetricsDisplay() {
         })
         .then(metrics => {
             if (!metrics) {
-                log('No metrics data received');
                 return;
             }
             
-            log(`Received metrics data with keys: ${Object.keys(metrics)}`);
+            // Update historical data with new metrics
+            updateHistoricalData(metrics);
             
             // Clear existing charts
             const metricsDiv = document.getElementById('systemMetrics');
@@ -182,28 +178,19 @@ function updateMetricsDisplay() {
             charts = {};
             metricsDiv.innerHTML = '';
             
-            // Process timestamps
-            let timestamps = [];
-            if (metrics.cpu && metrics.cpu.timestamps) {
-                timestamps = metrics.cpu.timestamps;
-            } else if (metrics.memory && metrics.memory.timestamps) {
-                timestamps = metrics.memory.timestamps;
-            } else if (metrics.disk && metrics.disk.timestamps) {
-                timestamps = metrics.disk.timestamps;
-            } else if (metrics.gpu && metrics.gpu[0] && metrics.gpu[0].timestamps) {
-                timestamps = metrics.gpu[0].timestamps;
-            }
-            
-            // Convert timestamps to chart labels
-            let chartLabels = timestamps;
+            // Use historical data for chart labels
+            let chartLabels = [];
             if (typeof luxon !== 'undefined') {
                 try {
-                    chartLabels = timestamps.map(ts => 
+                    chartLabels = historicalData.timestamps.map(ts => 
                         luxon.DateTime.fromISO(ts, { zone: 'utc' }).setZone('America/New_York').valueOf()
                     );
                 } catch (error) {
                     console.error('Error converting timestamps with luxon:', error);
+                    chartLabels = historicalData.timestamps;
                 }
+            } else {
+                chartLabels = historicalData.timestamps;
             }
             
             // Check if test is active
@@ -222,19 +209,122 @@ function updateMetricsDisplay() {
         });
 }
 
+// Function to update historical data with new metrics
+function updateHistoricalData(metrics) {
+    // Add new timestamps
+    let newTimestamps = [];
+    if (metrics.cpu && metrics.cpu.timestamps) {
+        newTimestamps = metrics.cpu.timestamps;
+    } else if (metrics.memory && metrics.memory.timestamps) {
+        newTimestamps = metrics.memory.timestamps;
+    } else if (metrics.disk && metrics.disk.timestamps) {
+        newTimestamps = metrics.disk.timestamps;
+    } else if (metrics.gpu && metrics.gpu[0] && metrics.gpu[0].timestamps) {
+        newTimestamps = metrics.gpu[0].timestamps;
+    }
+    
+    // Add new timestamps to historical data
+    historicalData.timestamps = [...historicalData.timestamps, ...newTimestamps];
+    
+    // Update CPU data
+    if (metrics.cpu && metrics.cpu.data) {
+        Object.keys(metrics.cpu.data).forEach(key => {
+            if (!historicalData.cpu.data[key]) {
+                historicalData.cpu.data[key] = [];
+            }
+            historicalData.cpu.data[key] = [...historicalData.cpu.data[key], ...metrics.cpu.data[key]];
+        });
+    }
+    
+    // Update Memory data
+    if (metrics.memory && metrics.memory.data) {
+        Object.keys(metrics.memory.data).forEach(key => {
+            if (!historicalData.memory.data[key]) {
+                historicalData.memory.data[key] = [];
+            }
+            historicalData.memory.data[key] = [...historicalData.memory.data[key], ...metrics.memory.data[key]];
+        });
+    }
+    
+    // Update Disk data
+    if (metrics.disk && metrics.disk.data) {
+        Object.keys(metrics.disk.data).forEach(key => {
+            if (!historicalData.disk.data[key]) {
+                historicalData.disk.data[key] = [];
+            }
+            historicalData.disk.data[key] = [...historicalData.disk.data[key], ...metrics.disk.data[key]];
+        });
+    }
+    
+    // Update GPU data
+    if (metrics.gpu && Array.isArray(metrics.gpu)) {
+        // Initialize GPU array if needed
+        while (historicalData.gpu.length < metrics.gpu.length) {
+            historicalData.gpu.push({ data: {} });
+        }
+        
+        // Update each GPU's data
+        metrics.gpu.forEach((gpuData, index) => {
+            if (gpuData.data) {
+                Object.keys(gpuData.data).forEach(key => {
+                    if (!historicalData.gpu[index].data[key]) {
+                        historicalData.gpu[index].data[key] = [];
+                    }
+                    historicalData.gpu[index].data[key] = [...historicalData.gpu[index].data[key], ...gpuData.data[key]];
+                });
+            }
+        });
+    }
+    
+    // Trim data to keep only the last 60 minutes (MAX_DATA_POINTS)
+    if (historicalData.timestamps.length > MAX_DATA_POINTS) {
+        const excess = historicalData.timestamps.length - MAX_DATA_POINTS;
+        historicalData.timestamps = historicalData.timestamps.slice(excess);
+        
+        // Trim CPU data
+        Object.keys(historicalData.cpu.data).forEach(key => {
+            if (historicalData.cpu.data[key].length > MAX_DATA_POINTS) {
+                historicalData.cpu.data[key] = historicalData.cpu.data[key].slice(excess);
+            }
+        });
+        
+        // Trim Memory data
+        Object.keys(historicalData.memory.data).forEach(key => {
+            if (historicalData.memory.data[key].length > MAX_DATA_POINTS) {
+                historicalData.memory.data[key] = historicalData.memory.data[key].slice(excess);
+            }
+        });
+        
+        // Trim Disk data
+        Object.keys(historicalData.disk.data).forEach(key => {
+            if (historicalData.disk.data[key].length > MAX_DATA_POINTS) {
+                historicalData.disk.data[key] = historicalData.disk.data[key].slice(excess);
+            }
+        });
+        
+        // Trim GPU data
+        historicalData.gpu.forEach((gpu, index) => {
+            Object.keys(gpu.data).forEach(key => {
+                if (gpu.data[key].length > MAX_DATA_POINTS) {
+                    gpu.data[key] = gpu.data[key].slice(excess);
+                }
+            });
+        });
+    }
+}
+
 // Create charts for each metric type
 function createMetricsCharts(container, metrics, chartLabels) {
     // CPU Chart
-    if (metrics.cpu && metrics.cpu.data) {
-        log('Creating CPU chart');
+    if (historicalData.cpu.data && Object.keys(historicalData.cpu.data).length > 0) {
         
         const canvasId = 'cpuChart';
-        createCanvas('systemMetrics', canvasId, 'CPU Usage (%)');
+        createCanvas('systemMetrics', canvasId, 'CPU Usage (%) - Last 60 Minutes');
         
         const datasets = [
-            { label: '%user', data: metrics.cpu.data['user'] || [], borderColor: 'blue', tension: 0.1 },
-            { label: '%system', data: metrics.cpu.data['system'] || [], borderColor: 'red', tension: 0.1 },
-            { label: '%idle', data: metrics.cpu.data['idle'] || [], borderColor: 'green', tension: 0.1 }
+            { label: '%user', data: historicalData.cpu.data['user'] || [], borderColor: 'blue', tension: 0.1 },
+            { label: '%system', data: historicalData.cpu.data['system'] || [], borderColor: 'red', tension: 0.1 },
+            { label: '%idle', data: historicalData.cpu.data['idle'] || [], borderColor: 'green', tension: 0.1 }
         ];
         
         const options = {
@@ -263,14 +353,13 @@ function createMetricsCharts(container, metrics, chartLabels) {
     }
     
     // Memory Chart
-    if (metrics.memory && metrics.memory.data) {
-        log('Creating Memory chart');
+    if (historicalData.memory.data && Object.keys(historicalData.memory.data).length > 0) {
         
         const canvasId = 'memoryChart';
-        createCanvas('systemMetrics', canvasId, 'Memory Usage (% Used)');
+        createCanvas('systemMetrics', canvasId, 'Memory Usage (% Used) - Last 60 Minutes');
         
         const datasets = [
-            { label: '%memused', data: metrics.memory.data['memused'] || [], borderColor: 'purple', tension: 0.1 }
+            { label: '%memused', data: historicalData.memory.data['memused'] || [], borderColor: 'purple', tension: 0.1 }
         ];
         
         const options = {
@@ -299,16 +388,15 @@ function createMetricsCharts(container, metrics, chartLabels) {
     }
     
     // Disk I/O Chart
-    if (metrics.disk && metrics.disk.data) {
-        log('Creating Disk I/O chart');
+    if (historicalData.disk.data && Object.keys(historicalData.disk.data).length > 0) {
         
         const canvasId = 'diskChart';
-        const deviceName = metrics.disk.device || 'N/A';
-        createCanvas('systemMetrics', canvasId, `Disk I/O (kB/s) - ${deviceName}`);
+        const deviceName = metrics.disk ? metrics.disk.device : 'N/A';
+        createCanvas('systemMetrics', canvasId, `Disk I/O (kB/s) - ${deviceName} - Last 60 Minutes`);
         
         const datasets = [
-            { label: 'Read kB/s', data: metrics.disk.data['rkB_s'] || [], borderColor: 'orange', tension: 0.1 },
-            { label: 'Write kB/s', data: metrics.disk.data['wkB_s'] || [], borderColor: 'brown', tension: 0.1 }
+            { label: 'Read kB/s', data: historicalData.disk.data['rkB_s'] || [], borderColor: 'orange', tension: 0.1 },
+            { label: 'Write kB/s', data: historicalData.disk.data['wkB_s'] || [], borderColor: 'brown', tension: 0.1 }
         ];
         
         const options = {
@@ -337,9 +425,8 @@ function createMetricsCharts(container, metrics, chartLabels) {
     }
     
     // GPU Charts
-    if (metrics.gpu && Array.isArray(metrics.gpu)) {
-        metrics.gpu.forEach((gpuData, index) => {
-            log(`Creating GPU ${index} charts`);
+    if (historicalData.gpu && historicalData.gpu.length > 0) {
+        historicalData.gpu.forEach((gpuData, index) => {
             
             // GPU Utilization & Memory Chart
             const utilMemCanvasId = `gpuUtilMemChart_${index}`;
@@ -391,7 +478,7 @@ function createMetricsCharts(container, metrics, chartLabels) {
             
             // GPU Temperature & Power Chart
             const tempPowerCanvasId = `gpuTempPowerChart_${index}`;
-            createCanvas('systemMetrics', tempPowerCanvasId, `GPU ${index} Temp (°C) & Power (W)`);
+            createCanvas('systemMetrics', tempPowerCanvasId, `GPU ${index} Temp (°C) & Power (W) - Last 60 Minutes`);
             
             const tempPowerDatasets = [
                 { label: 'Temp [°C]', data: gpuData.data['temperature_gpu'] || [], borderColor: 'magenta', tension: 0.1 },
@@ -430,7 +517,7 @@ function stopMetricsPolling(message = 'Polling stopped.') {
     if (metricsIntervalId) {
         clearInterval(metricsIntervalId);
         metricsIntervalId = null;
-        log(message);
+        console.log(`[INFO] ${message}`);
     }
 }
 
@@ -570,7 +657,6 @@ async function updateVideoList() {
 // Fallback initialization in case DOMContentLoaded already fired
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
     setTimeout(() => {
-        log('Document already loaded, running initialization immediately');
         const event = new Event('DOMContentLoaded');
         window.dispatchEvent(event);
     }, 500);
