@@ -1,6 +1,24 @@
 let metricsIntervalId = null;
 let charts = {};
 
+// Helper function to ensure canvas is properly created and sized
+function ensureCanvas(id, container, title) {
+    let canvas = document.getElementById(id);
+    if (!canvas) {
+        console.log(`Creating new canvas for ${id}`);
+        container.innerHTML += `<div class="chart-container"><h5>${title}</h5><canvas id="${id}" width="800" height="400"></canvas></div>`;
+        canvas = document.getElementById(id);
+        
+        // Force canvas to be visible and sized correctly
+        if (canvas) {
+            canvas.style.display = 'block';
+            canvas.width = 800;
+            canvas.height = 400;
+        }
+    }
+    return canvas;
+}
+
 function createOrUpdateChart(ctx, chartId, labels, datasets) {
     console.log(`Creating/updating chart: ${chartId}`);
     console.log(`- Labels count: ${labels.length}`);
@@ -121,68 +139,73 @@ function updateMetricsDisplay() {
                 stopMetricsPolling('Video test finished. Stopping metrics polling.');
             }
 
+            // CPU Chart
             if (metrics.cpu && metrics.cpu.data) {
                 console.log('Processing CPU chart data...');
                 console.log('CPU data fields:', Object.keys(metrics.cpu.data));
                 
                 const chartId = 'cpuChart';
-                let canvas = document.getElementById(chartId);
-                if (!canvas) {
-                    console.log('Creating CPU canvas element...');
-                    metricsDiv.innerHTML += `<div class="chart-container"><h5>CPU Usage (%)</h5><canvas id="${chartId}"></canvas></div>`;
-                    canvas = document.getElementById(chartId);
-                    console.log('CPU canvas created:', !!canvas);
-                }
+                const canvas = ensureCanvas(chartId, metricsDiv, 'CPU Usage (%)');
                 
-                try {
-                    const datasets = [
-                        { label: '%user', data: metrics.cpu.data['user'] || [], borderColor: 'blue', tension: 0.1 },
-                        { label: '%system', data: metrics.cpu.data['system'] || [], borderColor: 'red', tension: 0.1 },
-                        { label: '%idle', data: metrics.cpu.data['idle'] || [], borderColor: 'green', tension: 0.1 }
-                    ];
-                    console.log('CPU datasets prepared:', datasets.map(d => ({ label: d.label, dataPoints: d.data.length })));
-                    
-                    const ctx = canvas.getContext('2d');
-                    console.log('CPU canvas context:', !!ctx);
-                    createOrUpdateChart(ctx, chartId, chartLabels, datasets);
-                    console.log('CPU chart created/updated');
-                } catch (err) {
-                    console.error('Error creating CPU chart:', err);
+                if (canvas) {
+                    try {
+                        const datasets = [
+                            { label: '%user', data: metrics.cpu.data['user'] || [], borderColor: 'blue', tension: 0.1 },
+                            { label: '%system', data: metrics.cpu.data['system'] || [], borderColor: 'red', tension: 0.1 },
+                            { label: '%idle', data: metrics.cpu.data['idle'] || [], borderColor: 'green', tension: 0.1 }
+                        ];
+                        console.log('CPU datasets prepared:', datasets.map(d => ({ label: d.label, dataPoints: d.data.length })));
+                        
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            createOrUpdateChart(ctx, chartId, chartLabels, datasets);
+                            console.log('CPU chart created/updated');
+                        } else {
+                            console.error('Failed to get 2D context for CPU canvas');
+                        }
+                    } catch (err) {
+                        console.error('Error creating CPU chart:', err);
+                    }
+                } else {
+                    console.error('Failed to create CPU canvas element');
                 }
             } else {
                 console.log('CPU data not available for charting');
             }
 
+            // Memory Chart
             if (metrics.memory && metrics.memory.data) {
                 console.log('Processing Memory chart data...');
                 console.log('Memory data fields:', Object.keys(metrics.memory.data));
                 
                 const chartId = 'memoryChart';
-                let canvas = document.getElementById(chartId);
-                if (!canvas) {
-                    console.log('Creating Memory canvas element...');
-                    metricsDiv.innerHTML += `<div class="chart-container"><h5>Memory Usage (% Used)</h5><canvas id="${chartId}"></canvas></div>`;
-                    canvas = document.getElementById(chartId);
-                    console.log('Memory canvas created:', !!canvas);
-                }
+                const canvas = ensureCanvas(chartId, metricsDiv, 'Memory Usage (% Used)');
                 
-                try {
-                    const datasets = [
-                        { label: '%memused', data: metrics.memory.data['memused'] || [], borderColor: 'purple', tension: 0.1 }
-                    ];
-                    console.log('Memory datasets prepared:', datasets.map(d => ({ label: d.label, dataPoints: d.data.length })));
-                    
-                    const ctx = canvas.getContext('2d');
-                    console.log('Memory canvas context:', !!ctx);
-                    createOrUpdateChart(ctx, chartId, chartLabels, datasets);
-                    console.log('Memory chart created/updated');
-                } catch (err) {
-                    console.error('Error creating Memory chart:', err);
+                if (canvas) {
+                    try {
+                        const datasets = [
+                            { label: '%memused', data: metrics.memory.data['memused'] || [], borderColor: 'purple', tension: 0.1 }
+                        ];
+                        console.log('Memory datasets prepared:', datasets.map(d => ({ label: d.label, dataPoints: d.data.length })));
+                        
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            createOrUpdateChart(ctx, chartId, chartLabels, datasets);
+                            console.log('Memory chart created/updated');
+                        } else {
+                            console.error('Failed to get 2D context for Memory canvas');
+                        }
+                    } catch (err) {
+                        console.error('Error creating Memory chart:', err);
+                    }
+                } else {
+                    console.error('Failed to create Memory canvas element');
                 }
             } else {
                 console.log('Memory data not available for charting');
             }
 
+            // Disk I/O Chart
             if (metrics.disk && metrics.disk.data) {
                 console.log('Processing Disk I/O chart data...');
                 console.log('Disk data fields:', Object.keys(metrics.disk.data));
@@ -191,61 +214,82 @@ function updateMetricsDisplay() {
                 const deviceName = metrics.disk.device || 'N/A';
                 console.log('Disk device name:', deviceName);
                 
-                let canvas = document.getElementById(chartId);
-                if (!canvas) {
-                    console.log('Creating Disk canvas element...');
-                    metricsDiv.innerHTML += `<div class="chart-container"><h5>Disk I/O (kB/s) - ${deviceName}</h5><canvas id="${chartId}"></canvas></div>`;
-                    canvas = document.getElementById(chartId);
-                    console.log('Disk canvas created:', !!canvas);
-                }
+                const canvas = ensureCanvas(chartId, metricsDiv, `Disk I/O (kB/s) - ${deviceName}`);
                 
-                try {
-                    const datasets = [
-                        { label: 'Read kB/s', data: metrics.disk.data['rkB_s'] || [], borderColor: 'orange', tension: 0.1 },
-                        { label: 'Write kB/s', data: metrics.disk.data['wkB_s'] || [], borderColor: 'brown', tension: 0.1 }
-                    ];
-                    console.log('Disk datasets prepared:', datasets.map(d => ({ label: d.label, dataPoints: d.data.length })));
-                    
-                    const ctx = canvas.getContext('2d');
-                    console.log('Disk canvas context:', !!ctx);
-                    createOrUpdateChart(ctx, chartId, chartLabels, datasets);
-                    console.log('Disk chart created/updated');
-                } catch (err) {
-                    console.error('Error creating Disk chart:', err);
+                if (canvas) {
+                    try {
+                        const datasets = [
+                            { label: 'Read kB/s', data: metrics.disk.data['rkB_s'] || [], borderColor: 'orange', tension: 0.1 },
+                            { label: 'Write kB/s', data: metrics.disk.data['wkB_s'] || [], borderColor: 'brown', tension: 0.1 }
+                        ];
+                        console.log('Disk datasets prepared:', datasets.map(d => ({ label: d.label, dataPoints: d.data.length })));
+                        
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            createOrUpdateChart(ctx, chartId, chartLabels, datasets);
+                            console.log('Disk chart created/updated');
+                        } else {
+                            console.error('Failed to get 2D context for Disk canvas');
+                        }
+                    } catch (err) {
+                        console.error('Error creating Disk chart:', err);
+                    }
+                } else {
+                    console.error('Failed to create Disk canvas element');
                 }
             } else {
                 console.log('Disk data not available for charting');
             }
 
+            // GPU Charts
             if (metrics.gpu && Array.isArray(metrics.gpu)) {
                 metrics.gpu.forEach((gpuData, index) => {
+                    console.log(`Processing GPU ${index} chart data...`);
+                    
                     const gpuLuxonTimestamps = gpuData.timestamps.map(ts => luxon.DateTime.fromISO(ts, { zone: 'utc' }).setZone('America/New_York'));
                     const gpuChartLabels = gpuLuxonTimestamps.map(dt => dt.valueOf());
 
+                    // GPU Utilization & Memory Chart
                     const utilMemChartId = `gpuUtilMemChart_${index}`;
-                    let utilMemCanvas = document.getElementById(utilMemChartId);
-                    if (!utilMemCanvas) {
-                        metricsDiv.innerHTML += `<div class=\"chart-container\"><h5>GPU ${index} Utilization (%) & Memory (MiB)</h5><canvas id=\"${utilMemChartId}\"></canvas></div>`;
-                        utilMemCanvas = document.getElementById(utilMemChartId);
+                    const utilMemCanvas = ensureCanvas(utilMemChartId, metricsDiv, `GPU ${index} Utilization (%) & Memory (MiB)`);
+                    
+                    if (utilMemCanvas) {
+                        try {
+                            const utilMemDatasets = [
+                                { label: 'Util [%]', data: gpuData.data['utilization_gpu'] || [], borderColor: 'lime', tension: 0.1, yAxisID: 'yPercent' },
+                                { label: 'Mem Used [MiB]', data: gpuData.data['memory_used'] || [], borderColor: 'cyan', tension: 0.1, yAxisID: 'yMiB' }
+                            ];
+                            
+                            const utilMemCtx = utilMemCanvas.getContext('2d');
+                            if (utilMemCtx) {
+                                createOrUpdateChart(utilMemCtx, utilMemChartId, gpuChartLabels, utilMemDatasets);
+                                console.log(`GPU ${index} Utilization & Memory chart created/updated`);
+                            }
+                        } catch (err) {
+                            console.error(`Error creating GPU ${index} Utilization & Memory chart:`, err);
+                        }
                     }
-                    const utilMemDatasets = [
-                        { label: 'Util [%]', data: gpuData.data['utilization_gpu'] || [], borderColor: 'lime', tension: 0.1, yAxisID: 'yPercent' },
-                        { label: 'Mem Used [MiB]', data: gpuData.data['memory_used'] || [], borderColor: 'cyan', tension: 0.1, yAxisID: 'yMiB' }
-                    ];
-                    createOrUpdateChart(utilMemCanvas.getContext('2d'), utilMemChartId, gpuChartLabels, utilMemDatasets);
 
+                    // GPU Temperature & Power Chart
                     const tempPowerChartId = `gpuTempPowerChart_${index}`;
-                    let tempPowerCanvas = document.getElementById(tempPowerChartId);
-                    if (!tempPowerCanvas) {
-                        metricsDiv.innerHTML += `<div class=\"chart-container\"><h5>GPU ${index} Temp (°C) & Power (W)</h5><canvas id=\"${tempPowerChartId}\"></canvas></div>`;
-                        tempPowerCanvas = document.getElementById(tempPowerChartId);
+                    const tempPowerCanvas = ensureCanvas(tempPowerChartId, metricsDiv, `GPU ${index} Temp (°C) & Power (W)`);
+                    
+                    if (tempPowerCanvas) {
+                        try {
+                            const tempPowerDatasets = [
+                                { label: 'Temp [°C]', data: gpuData.data['temperature_gpu'] || [], borderColor: 'magenta', tension: 0.1 },
+                                { label: 'Power [W]', data: gpuData.data['power_draw'] || [], borderColor: 'gold', tension: 0.1 }
+                            ];
+                            
+                            const tempPowerCtx = tempPowerCanvas.getContext('2d');
+                            if (tempPowerCtx) {
+                                createOrUpdateChart(tempPowerCtx, tempPowerChartId, gpuChartLabels, tempPowerDatasets);
+                                console.log(`GPU ${index} Temp & Power chart created/updated`);
+                            }
+                        } catch (err) {
+                            console.error(`Error creating GPU ${index} Temp & Power chart:`, err);
+                        }
                     }
-                    const tempPowerDatasets = [
-                        { label: 'Temp [°C]', data: gpuData.data['temperature_gpu'] || [], borderColor: 'magenta', tension: 0.1 },
-                        { label: 'Power [W]', data: gpuData.data['power_draw'] || [], borderColor: 'gold', tension: 0.1 }
-                    ];
-                    createOrUpdateChart(tempPowerCanvas.getContext('2d'), tempPowerChartId, gpuChartLabels, tempPowerDatasets);
-                    console.log(`Chart ${tempPowerChartId} created successfully`);
                 });
             }
 
@@ -383,9 +427,26 @@ async function updateVideoList() {
 }
 
 window.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('startSpeedTestButton').addEventListener('click', runSpeedTest);
+    console.log('DOM content loaded, initializing dashboard...');
+    
+    // Add event listener for speed test button
+    const speedTestButton = document.getElementById('startSpeedTestButton');
+    if (speedTestButton) {
+        speedTestButton.addEventListener('click', runSpeedTest);
+        console.log('Speed test button event listener attached');
+    } else {
+        console.error('Speed test button not found in DOM');
+    }
+    
+    // Start metrics polling
+    console.log('Starting metrics polling...');
+    updateMetricsDisplay(); // Initial update
     metricsIntervalId = setInterval(updateMetricsDisplay, 3000);
-    updateMetricsDisplay();
+    
+    // Start video list polling
+    console.log('Starting video list polling...');
+    updateVideoList(); // Initial update
     setInterval(updateVideoList, 30000);
-    updateVideoList();
+    
+    console.log('Dashboard initialization complete');
 });
