@@ -37,43 +37,47 @@ function createOrUpdateChart(ctx, chartId, labels, datasets) {
             console.log(`Chart ${chartId} updated successfully`);
         } else {
             console.log(`Creating new chart: ${chartId}`);
-            try {
-                charts[chartId] = new Chart(ctx, {
+            charts[chartId] = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: datasets
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                scales: {
-                    x: {
-                        type: 'time',
-                        adapters: {
-                            date: { locale: 'en-US', zone: 'America/New_York' }
-                        },
-                        ticks: { 
-                            autoSkip: true, 
-                            maxTicksLimit: 10,
-                        },
-                        time: {
-                            unit: 'second',
-                            displayFormats: {
-                                second: 'HH:mm:ss'
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            adapters: {
+                                date: { locale: 'en-US', zone: 'America/New_York' }
                             },
-                            tooltipFormat: 'yyyy-MM-dd HH:mm:ss ZZZZ'
+                            ticks: { 
+                                autoSkip: true, 
+                                maxTicksLimit: 10
+                            },
+                            time: {
+                                unit: 'second',
+                                displayFormats: {
+                                    second: 'HH:mm:ss'
+                                },
+                                tooltipFormat: 'yyyy-MM-dd HH:mm:ss ZZZZ'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true
                         }
                     },
-                    y: {
-                        beginAtZero: true
+                    animation: false,
+                    plugins: {
+                        legend: { position: 'top' }
                     }
-                },
-                animation: false,
-                plugins: {
-                    legend: { position: 'top' }
                 }
-            }
-        });
+            });
+            console.log(`Chart ${chartId} created successfully`);
+        }
+    } catch (err) {
+        console.error(`Error in createOrUpdateChart for ${chartId}:`, err);
     }
 }
 
@@ -292,7 +296,6 @@ function updateMetricsDisplay() {
                     }
                 });
             }
-
         })
         .catch(error => {
             console.error('Error fetching metrics:', error);
@@ -309,34 +312,43 @@ async function measurePing(samples = 10) {
     updateStatus('Testing latency...');
     let rtts = [];
     const endpoint = '/api/speedtest/ping';
-    for (let i = 0; i < samples; i++) {
-        const start = performance.now();
-        try {
-            await fetch(endpoint, { cache: 'no-store' }); // Prevent caching
-            const end = performance.now();
-            rtts.push(end - start);
-        } catch (e) {
-            console.error(`Ping ${i+1} failed:`, e);
-            // Optionally skip this sample or throw error
+    
+    try {
+        for (let i = 0; i < samples; i++) {
+            const start = performance.now();
+            try {
+                await fetch(endpoint, { cache: 'no-store' }); // Prevent caching
+                const end = performance.now();
+                rtts.push(end - start);
+            } catch (e) {
+                console.error(`Ping ${i+1} failed:`, e);
+                // Optionally skip this sample or throw error
+            }
+            await new Promise(resolve => setTimeout(resolve, 50)); // Small delay between pings
         }
-        await new Promise(resolve => setTimeout(resolve, 50)); // Small delay between pings
+
+        if (rtts.length === 0) throw new Error('Ping test failed completely.');
+
+        rtts.sort((a, b) => a - b);
+        const minPing = rtts[0];
+        const avgPing = rtts.reduce((a, b) => a + b, 0) / rtts.length;
+        
+        // Calculate jitter (standard deviation)
+        const mean = avgPing;
+        const variance = rtts.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / rtts.length;
+        const jitter = Math.sqrt(variance);
+        
+        document.getElementById('pingResult').textContent = minPing.toFixed(2);
+        document.getElementById('jitterResult').textContent = jitter.toFixed(2);
+        updateStatus('Latency test complete.');
+        return { ping: minPing, jitter: jitter };
+    } catch (err) {
+        console.error('Error in ping measurement:', err);
+        document.getElementById('pingResult').textContent = 'Error';
+        document.getElementById('jitterResult').textContent = 'Error';
+        updateStatus('Latency test failed.');
+        throw err;
     }
-
-    if (rtts.length === 0) throw new Error('Ping test failed completely.');
-
-    rtts.sort((a, b) => a - b);
-    const minPing = rtts[0];
-    const avgPing = rtts.reduce((a, b) => a + b, 0) / rtts.length;
-    
-    // Calculate jitter (standard deviation)
-    const mean = avgPing;
-    const variance = rtts.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / rtts.length;
-    const jitter = Math.sqrt(variance);
-    
-    document.getElementById('pingResult').textContent = minPing.toFixed(2);
-    document.getElementById('jitterResult').textContent = jitter.toFixed(2);
-    updateStatus('Latency test complete.');
-    return { ping: minPing, jitter: jitter };
 }
 
 async function measureDownload(endpoint = '/api/speedtest/download') {
@@ -374,10 +386,10 @@ async function measureUpload(sizeMB = 10, endpoint = '/api/speedtest/upload') {
         if (!response.ok) throw new Error(`Server error: ${response.status}`);
         const end = performance.now();
         const durationSeconds = (end - start) / 1000;
-         if (durationSeconds === 0) throw new Error('Upload test took zero time.');
+        if (durationSeconds === 0) throw new Error('Upload test took zero time.');
         const speedMbps = (sizeBytes * 8) / (durationSeconds * 1000 * 1000);
         document.getElementById('uploadResult').textContent = speedMbps.toFixed(2);
-         updateStatus('Upload test complete.');
+        updateStatus('Upload test complete.');
         return speedMbps;
     } catch (e) {
         document.getElementById('uploadResult').textContent = 'Error';
@@ -407,23 +419,23 @@ async function runSpeedTest() {
 
 // Fetch videos
 async function updateVideoList() {
-    fetch('/api/videos')
-        .then(response => response.json())
-        .then(videos => {
-            const videoList = document.getElementById('videoList');
-            videoList.innerHTML = videos.map(video => 
-                '<div class="video-item">' +
-                    '<div>' + video.name + '</div>' +
-                    '<video controls width="400">' +
-                        '<source src="/videos/' + video.name + '" type="video/mp4">' +
-                        'Your browser does not support the video tag.' +
-                    '</video>' +
-                '</div>'
-            ).join('');
-        })
-        .catch(error => {
-            console.error('Error updating video list:', error);
-        });
+    try {
+        const response = await fetch('/api/videos');
+        const videos = await response.json();
+        
+        const videoList = document.getElementById('videoList');
+        videoList.innerHTML = videos.map(video => 
+            '<div class="video-item">' +
+                '<div>' + video.name + '</div>' +
+                '<video controls width="400">' +
+                    '<source src="/videos/' + video.name + '" type="video/mp4">' +
+                    'Your browser does not support the video tag.' +
+                '</video>' +
+            '</div>'
+        ).join('');
+    } catch (error) {
+        console.error('Error updating video list:', error);
+    }
 }
 
 window.addEventListener('DOMContentLoaded', function() {
