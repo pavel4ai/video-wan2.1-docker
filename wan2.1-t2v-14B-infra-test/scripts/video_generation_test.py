@@ -6,7 +6,6 @@ import os
 import glob
 import shutil
 from prometheus_client import Gauge, start_http_server
-from error_handler import ErrorHandler
 
 # Configure logging
 logging.basicConfig(
