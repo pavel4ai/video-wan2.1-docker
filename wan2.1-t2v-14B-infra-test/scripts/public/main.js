@@ -188,16 +188,50 @@ function updateMetricsDisplay() {
             return response.json();
         })
         .then(metrics => {
+            // Debug log the raw metrics data
+            console.log('Raw metrics data:', metrics);
+            
             if (!metrics) {
                 return;
             }
             
+            // Specifically debug GPU data
+            if (metrics.gpu) {
+                console.log('GPU data available:', metrics.gpu.length, 'GPUs');
+                metrics.gpu.forEach((gpu, index) => {
+                    console.log(`GPU ${index} data:`, gpu);
+                    if (gpu.data) {
+                        console.log(`GPU ${index} data fields:`, Object.keys(gpu.data));
+                        Object.keys(gpu.data).forEach(key => {
+                            console.log(`GPU ${index} ${key} data points:`, gpu.data[key].length);
+                        });
+                    } else {
+                        console.log(`GPU ${index} has no data object`);
+                    }
+                });
+            } else {
+                console.log('No GPU data available in metrics');
+            }
             // Update historical data with new metrics
             updateHistoricalData(metrics);
             
             // If we don't have any data yet, don't try to create charts
             if (historicalData.timestamps.length === 0) {
                 return;
+            }
+            
+            // Debug log historical data
+            console.log('Historical data timestamps:', historicalData.timestamps.length);
+            if (historicalData.gpu && historicalData.gpu.length > 0) {
+                console.log('Historical GPU data:');
+                historicalData.gpu.forEach((gpu, index) => {
+                    if (gpu.data) {
+                        console.log(`Historical GPU ${index} data fields:`, Object.keys(gpu.data));
+                        Object.keys(gpu.data).forEach(key => {
+                            console.log(`Historical GPU ${index} ${key} data points:`, gpu.data[key].length);
+                        });
+                    }
+                });
             }
             
             // Get the metrics div
@@ -328,6 +362,8 @@ function updateHistoricalData(metrics) {
     
     // Update GPU data
     if (metrics.gpu && Array.isArray(metrics.gpu)) {
+        console.log('Updating GPU data for', metrics.gpu.length, 'GPUs');
+        
         // Initialize GPU array if needed
         while (historicalData.gpu.length < metrics.gpu.length) {
             historicalData.gpu.push({ data: {} });
@@ -336,9 +372,20 @@ function updateHistoricalData(metrics) {
         // Update each GPU's data
         metrics.gpu.forEach((gpuData, index) => {
             if (gpuData.data) {
+                console.log(`Updating GPU ${index} data with fields:`, Object.keys(gpuData.data));
                 updateMetricData(gpuData.data, historicalData.gpu[index].data);
+                
+                // Verify data was updated
+                console.log(`After update, GPU ${index} data fields:`, Object.keys(historicalData.gpu[index].data));
+                Object.keys(historicalData.gpu[index].data).forEach(key => {
+                    console.log(`GPU ${index} ${key} now has ${historicalData.gpu[index].data[key].length} data points`);
+                });
+            } else {
+                console.log(`GPU ${index} has no data object`);
             }
         });
+    } else {
+        console.log('No GPU data to update');
     }
     
     // Trim data to keep only the last 60 minutes (MAX_DATA_POINTS)
@@ -482,16 +529,55 @@ function createMetricsCharts(container, metrics, chartLabels) {
     
     // GPU Charts
     if (historicalData.gpu && historicalData.gpu.length > 0) {
+        console.log('Creating GPU charts for', historicalData.gpu.length, 'GPUs');
+        
         historicalData.gpu.forEach((gpuData, index) => {
+            console.log(`Creating charts for GPU ${index}`);
+            console.log(`GPU ${index} data fields:`, gpuData.data ? Object.keys(gpuData.data) : 'No data');
+            
+            // Skip if no data available for this GPU
+            if (!gpuData.data || Object.keys(gpuData.data).length === 0) {
+                console.log(`No data available for GPU ${index}, skipping charts`);
+                return;
+            }
             
             // GPU Utilization & Memory Chart
             const utilMemCanvasId = `gpuUtilMemChart_${index}`;
-            createCanvas('systemMetrics', utilMemCanvasId, `GPU ${index} Utilization (%) & Memory (MiB)`);
+            createCanvas('systemMetrics', utilMemCanvasId, `GPU ${index} Utilization (%) & Memory (MiB) - Last 60 Minutes`);
             
-            const utilMemDatasets = [
-                { label: 'Util [%]', data: gpuData.data['utilization_gpu'] || [], borderColor: 'lime', tension: 0.1, yAxisID: 'yPercent' },
-                { label: 'Mem Used [MiB]', data: gpuData.data['memory_used'] || [], borderColor: 'cyan', tension: 0.1, yAxisID: 'yMiB' }
-            ];
+            // Check if utilization_gpu and memory_used data exists
+            const hasUtilData = gpuData.data['utilization_gpu'] && gpuData.data['utilization_gpu'].length > 0;
+            const hasMemData = gpuData.data['memory_used'] && gpuData.data['memory_used'].length > 0;
+            
+            console.log(`GPU ${index} utilization data available:`, hasUtilData);
+            console.log(`GPU ${index} memory data available:`, hasMemData);
+            
+            const utilMemDatasets = [];
+            
+            if (hasUtilData) {
+                utilMemDatasets.push({ 
+                    label: 'Util [%]', 
+                    data: gpuData.data['utilization_gpu'], 
+                    borderColor: 'lime', 
+                    tension: 0.1, 
+                    yAxisID: 'yPercent' 
+                });
+            }
+            
+            if (hasMemData) {
+                utilMemDatasets.push({ 
+                    label: 'Mem Used [MiB]', 
+                    data: gpuData.data['memory_used'], 
+                    borderColor: 'cyan', 
+                    tension: 0.1, 
+                    yAxisID: 'yMiB' 
+                });
+            }
+            
+            // Only create chart if we have datasets
+            if (utilMemDatasets.length === 0) {
+                console.log(`No utilization or memory data for GPU ${index}, skipping chart`);
+            } else {
             
             const utilMemOptions = {
                 responsive: true,
@@ -531,17 +617,44 @@ function createMetricsCharts(container, metrics, chartLabels) {
             };
             
             createOrUpdateChart(utilMemCanvasId, 'line', chartLabels, utilMemDatasets, utilMemOptions);
+            }
             
             // GPU Temperature & Power Chart
             const tempPowerCanvasId = `gpuTempPowerChart_${index}`;
             createCanvas('systemMetrics', tempPowerCanvasId, `GPU ${index} Temp (°C) & Power (W) - Last 60 Minutes`);
             
-            const tempPowerDatasets = [
-                { label: 'Temp [°C]', data: gpuData.data['temperature_gpu'] || [], borderColor: 'magenta', tension: 0.1 },
-                { label: 'Power [W]', data: gpuData.data['power_draw'] || [], borderColor: 'gold', tension: 0.1 }
-            ];
+            // Check if temperature_gpu and power_draw data exists
+            const hasTempData = gpuData.data['temperature_gpu'] && gpuData.data['temperature_gpu'].length > 0;
+            const hasPowerData = gpuData.data['power_draw'] && gpuData.data['power_draw'].length > 0;
             
-            const tempPowerOptions = {
+            console.log(`GPU ${index} temperature data available:`, hasTempData);
+            console.log(`GPU ${index} power data available:`, hasPowerData);
+            
+            const tempPowerDatasets = [];
+            
+            if (hasTempData) {
+                tempPowerDatasets.push({ 
+                    label: 'Temp [°C]', 
+                    data: gpuData.data['temperature_gpu'], 
+                    borderColor: 'magenta', 
+                    tension: 0.1 
+                });
+            }
+            
+            if (hasPowerData) {
+                tempPowerDatasets.push({ 
+                    label: 'Power [W]', 
+                    data: gpuData.data['power_draw'], 
+                    borderColor: 'gold', 
+                    tension: 0.1 
+                });
+            }
+            
+            // Only create chart if we have datasets
+            if (tempPowerDatasets.length === 0) {
+                console.log(`No temperature or power data for GPU ${index}, skipping chart`);
+            } else {
+                const tempPowerOptions = {
                 responsive: true,
                 maintainAspectRatio: true,
                 scales: {
@@ -563,8 +676,11 @@ function createMetricsCharts(container, metrics, chartLabels) {
                 }
             };
             
-            createOrUpdateChart(tempPowerCanvasId, 'line', chartLabels, tempPowerDatasets, tempPowerOptions);
+                createOrUpdateChart(tempPowerCanvasId, 'line', chartLabels, tempPowerDatasets, tempPowerOptions);
+            }
         });
+    } else {
+        console.log('No GPU data available for charts');
     }
 }
 
