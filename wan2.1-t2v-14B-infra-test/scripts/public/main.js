@@ -545,13 +545,28 @@ function createMetricsCharts(container, metrics, chartLabels) {
                 return;
             }
             
+            console.log(`GPU ${index} has data with ${Object.keys(gpuData.data).length} fields`);
+            // Debug the first data point for each field
+            Object.keys(gpuData.data).forEach(field => {
+                if (gpuData.data[field] && gpuData.data[field].length > 0) {
+                    console.log(`GPU ${index} field ${field} first value:`, gpuData.data[field][0]);
+                }
+            });
+            
             // GPU Utilization & Memory Chart
             const utilMemCanvasId = `gpuUtilMemChart_${index}`;
             createCanvas('systemMetrics', utilMemCanvasId, `GPU ${index} Utilization (%) & Memory (MiB) - Last 60 Minutes`);
             
             // Find the field names for utilization and memory
-            const utilizationField = findField('utilization');
-            const memoryUsedField = findField('memory.used') || findField('memory_used');
+            // Try multiple patterns to increase chances of finding the right field
+            const utilizationField = findField('utilization') || 
+                                    findField('gpu__') || 
+                                    findField('util');
+                                    
+            const memoryUsedField = findField('memory.used') || 
+                                  findField('memory_used') || 
+                                  findField('mem') || 
+                                  findField('used');
             
             const hasUtilData = utilizationField && gpuData.data[utilizationField].length > 0;
             const hasMemData = memoryUsedField && gpuData.data[memoryUsedField].length > 0;
@@ -561,24 +576,43 @@ function createMetricsCharts(container, metrics, chartLabels) {
             
             // Helper function to find the closest matching field name
             function findField(pattern) {
-                const fields = Object.keys(gpuData.data);
+                const fields = Object.keys(gpuData.data || {});
+                if (!fields.length) {
+                    console.log(`No fields available to match pattern: ${pattern}`);
+                    return null;
+                }
+                
+                console.log(`Searching for field matching '${pattern}' among:`, fields);
+                
                 // Try exact match first
                 const exactMatch = fields.find(f => f === pattern);
-                if (exactMatch) return exactMatch;
+                if (exactMatch) {
+                    console.log(`Found exact match for '${pattern}': ${exactMatch}`);
+                    return exactMatch;
+                }
                 
                 // Try contains match
                 const containsMatch = fields.find(f => f.includes(pattern));
-                if (containsMatch) return containsMatch;
+                if (containsMatch) {
+                    console.log(`Found contains match for '${pattern}': ${containsMatch}`);
+                    return containsMatch;
+                }
                 
                 // Try regex pattern match
                 try {
                     const regex = new RegExp(pattern.replace('.', '\\.').
                         replace('[', '\\[').replace(']', '\\]'));
-                    return fields.find(f => regex.test(f));
+                    const regexMatch = fields.find(f => regex.test(f));
+                    if (regexMatch) {
+                        console.log(`Found regex match for '${pattern}': ${regexMatch}`);
+                        return regexMatch;
+                    }
                 } catch (e) {
                     console.error(`Invalid regex pattern: ${pattern}`, e);
-                    return null;
                 }
+                
+                console.log(`No match found for '${pattern}'`);
+                return null;
             }
             
             console.log(`GPU ${index} utilization data available:`, hasUtilData);
@@ -610,6 +644,7 @@ function createMetricsCharts(container, metrics, chartLabels) {
             if (utilMemDatasets.length === 0) {
                 console.log(`No utilization or memory data for GPU ${index}, skipping chart`);
             } else {
+                console.log(`Creating GPU ${index} utilization/memory chart with ${utilMemDatasets.length} datasets`);
             
             const utilMemOptions = {
                 responsive: true,
@@ -618,11 +653,13 @@ function createMetricsCharts(container, metrics, chartLabels) {
                     x: {
                         type: 'time',
                         time: {
-                            unit: 'second',
+                            unit: 'minute',
                             displayFormats: {
-                                second: 'HH:mm:ss'
+                                minute: 'HH:mm'
                             }
-                        }
+                        },
+                        min: getMinTimeForDisplay(),
+                        max: getMaxTimeForDisplay()
                     },
                     yPercent: {
                         type: 'linear',
@@ -656,8 +693,13 @@ function createMetricsCharts(container, metrics, chartLabels) {
             createCanvas('systemMetrics', tempPowerCanvasId, `GPU ${index} Temp (°C) & Power (W) - Last 60 Minutes`);
             
             // Find the field names for temperature and power
-            const temperatureField = findField('temperature');
-            const powerField = findField('power');
+            const temperatureField = findField('temperature') || 
+                                   findField('temp') || 
+                                   findField('C_');
+                                   
+            const powerField = findField('power') || 
+                            findField('draw') || 
+                            findField('W_');
             
             const hasTempData = temperatureField && gpuData.data[temperatureField].length > 0;
             const hasPowerData = powerField && gpuData.data[powerField].length > 0;
@@ -696,11 +738,13 @@ function createMetricsCharts(container, metrics, chartLabels) {
                     x: {
                         type: 'time',
                         time: {
-                            unit: 'second',
+                            unit: 'minute',
                             displayFormats: {
-                                second: 'HH:mm:ss'
+                                minute: 'HH:mm'
                             }
-                        }
+                        },
+                        min: getMinTimeForDisplay(),
+                        max: getMaxTimeForDisplay()
                     },
                     y: {
                         beginAtZero: true
