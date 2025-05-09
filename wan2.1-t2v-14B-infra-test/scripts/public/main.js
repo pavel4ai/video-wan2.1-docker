@@ -37,12 +37,12 @@ function createOrUpdateChart(ctx, chartId, labels, datasets) {
             console.log(`Chart ${chartId} updated successfully`);
         } else {
             console.log(`Creating new chart: ${chartId}`);
-            charts[chartId] = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: datasets
-            },
+            try {
+                charts[chartId] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
