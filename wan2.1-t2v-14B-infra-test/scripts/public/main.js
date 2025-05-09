@@ -13,6 +13,39 @@ let historicalData = {
     gpu: []
 };
 
+// Helper function to get minimum time for x-axis display (60 minutes ago)
+function getMinTimeForDisplay() {
+    if (historicalData.timestamps.length === 0) {
+        // If no data yet, show from 60 minutes ago from now
+        return Date.now() - (60 * 60 * 1000);
+    }
+    
+    // If we have data but less than 60 minutes worth, show from 60 minutes ago from the latest timestamp
+    const latestTimestamp = getMaxTimeForDisplay();
+    return latestTimestamp - (60 * 60 * 1000);
+}
+
+// Helper function to get maximum time for x-axis display (now or latest data point)
+function getMaxTimeForDisplay() {
+    if (historicalData.timestamps.length === 0) {
+        return Date.now();
+    }
+    
+    // Get the latest timestamp from our data
+    const latestIsoTimestamp = historicalData.timestamps[historicalData.timestamps.length - 1];
+    
+    // Convert to milliseconds timestamp
+    let latestTimestamp;
+    if (typeof luxon !== 'undefined') {
+        latestTimestamp = luxon.DateTime.fromISO(latestIsoTimestamp, { zone: 'utc' })
+            .setZone('America/New_York').valueOf();
+    } else {
+        latestTimestamp = new Date(latestIsoTimestamp).getTime();
+    }
+    
+    return latestTimestamp;
+}
+
 // Simple logger for important events
 function log(message) {
     console.log(`[INFO] ${message}`);
@@ -162,7 +195,12 @@ function updateMetricsDisplay() {
             // Update historical data with new metrics
             updateHistoricalData(metrics);
             
-            // Clear existing charts
+            // If we don't have any data yet, don't try to create charts
+            if (historicalData.timestamps.length === 0) {
+                return;
+            }
+            
+            // Get the metrics div
             const metricsDiv = document.getElementById('systemMetrics');
             if (!metricsDiv) {
                 console.error('systemMetrics div not found');
@@ -211,6 +249,18 @@ function updateMetricsDisplay() {
 
 // Function to update historical data with new metrics
 function updateHistoricalData(metrics) {
+    // Check if we need to clear historical data (for testing)
+    if (metrics.reset_historical_data) {
+        historicalData = {
+            timestamps: [],
+            cpu: { data: {} },
+            memory: { data: {} },
+            disk: { data: {} },
+            gpu: []
+        };
+        return;
+    }
+    
     // Add new timestamps
     let newTimestamps = [];
     if (metrics.cpu && metrics.cpu.timestamps) {
@@ -223,37 +273,57 @@ function updateHistoricalData(metrics) {
         newTimestamps = metrics.gpu[0].timestamps;
     }
     
-    // Add new timestamps to historical data
-    historicalData.timestamps = [...historicalData.timestamps, ...newTimestamps];
+    // Skip if no new timestamps
+    if (newTimestamps.length === 0) {
+        return;
+    }
+    
+    // Check for duplicates to avoid overlapping data
+    const lastTimestamp = historicalData.timestamps.length > 0 ? 
+        historicalData.timestamps[historicalData.timestamps.length - 1] : null;
+    
+    // Find the index of the first new timestamp that's after our last timestamp
+    let startIndex = 0;
+    if (lastTimestamp) {
+        startIndex = newTimestamps.findIndex(ts => ts > lastTimestamp);
+        if (startIndex === -1) {
+            // All new timestamps are older or equal to our last one, skip them
+            return;
+        }
+    }
+    
+    // Add only new timestamps to historical data
+    const filteredTimestamps = newTimestamps.slice(startIndex);
+    historicalData.timestamps = [...historicalData.timestamps, ...filteredTimestamps];
+    
+    // Helper function to update data for a specific metric type
+    const updateMetricData = (metricData, historicalMetricData) => {
+        if (!metricData) return;
+        
+        Object.keys(metricData).forEach(key => {
+            if (!historicalMetricData[key]) {
+                historicalMetricData[key] = [];
+            }
+            
+            // Only add data points corresponding to the filtered timestamps
+            const newData = metricData[key].slice(startIndex);
+            historicalMetricData[key] = [...historicalMetricData[key], ...newData];
+        });
+    };
     
     // Update CPU data
     if (metrics.cpu && metrics.cpu.data) {
-        Object.keys(metrics.cpu.data).forEach(key => {
-            if (!historicalData.cpu.data[key]) {
-                historicalData.cpu.data[key] = [];
-            }
-            historicalData.cpu.data[key] = [...historicalData.cpu.data[key], ...metrics.cpu.data[key]];
-        });
+        updateMetricData(metrics.cpu.data, historicalData.cpu.data);
     }
     
     // Update Memory data
     if (metrics.memory && metrics.memory.data) {
-        Object.keys(metrics.memory.data).forEach(key => {
-            if (!historicalData.memory.data[key]) {
-                historicalData.memory.data[key] = [];
-            }
-            historicalData.memory.data[key] = [...historicalData.memory.data[key], ...metrics.memory.data[key]];
-        });
+        updateMetricData(metrics.memory.data, historicalData.memory.data);
     }
     
     // Update Disk data
     if (metrics.disk && metrics.disk.data) {
-        Object.keys(metrics.disk.data).forEach(key => {
-            if (!historicalData.disk.data[key]) {
-                historicalData.disk.data[key] = [];
-            }
-            historicalData.disk.data[key] = [...historicalData.disk.data[key], ...metrics.disk.data[key]];
-        });
+        updateMetricData(metrics.disk.data, historicalData.disk.data);
     }
     
     // Update GPU data
@@ -266,12 +336,7 @@ function updateHistoricalData(metrics) {
         // Update each GPU's data
         metrics.gpu.forEach((gpuData, index) => {
             if (gpuData.data) {
-                Object.keys(gpuData.data).forEach(key => {
-                    if (!historicalData.gpu[index].data[key]) {
-                        historicalData.gpu[index].data[key] = [];
-                    }
-                    historicalData.gpu[index].data[key] = [...historicalData.gpu[index].data[key], ...gpuData.data[key]];
-                });
+                updateMetricData(gpuData.data, historicalData.gpu[index].data);
             }
         });
     }
@@ -281,35 +346,20 @@ function updateHistoricalData(metrics) {
         const excess = historicalData.timestamps.length - MAX_DATA_POINTS;
         historicalData.timestamps = historicalData.timestamps.slice(excess);
         
-        // Trim CPU data
-        Object.keys(historicalData.cpu.data).forEach(key => {
-            if (historicalData.cpu.data[key].length > MAX_DATA_POINTS) {
-                historicalData.cpu.data[key] = historicalData.cpu.data[key].slice(excess);
-            }
-        });
-        
-        // Trim Memory data
-        Object.keys(historicalData.memory.data).forEach(key => {
-            if (historicalData.memory.data[key].length > MAX_DATA_POINTS) {
-                historicalData.memory.data[key] = historicalData.memory.data[key].slice(excess);
-            }
-        });
-        
-        // Trim Disk data
-        Object.keys(historicalData.disk.data).forEach(key => {
-            if (historicalData.disk.data[key].length > MAX_DATA_POINTS) {
-                historicalData.disk.data[key] = historicalData.disk.data[key].slice(excess);
-            }
-        });
-        
-        // Trim GPU data
-        historicalData.gpu.forEach((gpu, index) => {
-            Object.keys(gpu.data).forEach(key => {
-                if (gpu.data[key].length > MAX_DATA_POINTS) {
-                    gpu.data[key] = gpu.data[key].slice(excess);
+        // Helper function to trim data arrays
+        const trimData = (dataObj) => {
+            Object.keys(dataObj).forEach(key => {
+                if (dataObj[key].length > MAX_DATA_POINTS) {
+                    dataObj[key] = dataObj[key].slice(excess);
                 }
             });
-        });
+        };
+        
+        // Trim all data
+        trimData(historicalData.cpu.data);
+        trimData(historicalData.memory.data);
+        trimData(historicalData.disk.data);
+        historicalData.gpu.forEach(gpu => trimData(gpu.data));
     }
 }
 
@@ -334,11 +384,13 @@ function createMetricsCharts(container, metrics, chartLabels) {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'second',
+                        unit: 'minute',
                         displayFormats: {
-                            second: 'HH:mm:ss'
+                            minute: 'HH:mm'
                         }
-                    }
+                    },
+                    min: getMinTimeForDisplay(),
+                    max: getMaxTimeForDisplay()
                 },
                 y: {
                     beginAtZero: true
@@ -369,11 +421,13 @@ function createMetricsCharts(container, metrics, chartLabels) {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'second',
+                        unit: 'minute',
                         displayFormats: {
-                            second: 'HH:mm:ss'
+                            minute: 'HH:mm'
                         }
-                    }
+                    },
+                    min: getMinTimeForDisplay(),
+                    max: getMaxTimeForDisplay()
                 },
                 y: {
                     beginAtZero: true
@@ -406,11 +460,13 @@ function createMetricsCharts(container, metrics, chartLabels) {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'second',
+                        unit: 'minute',
                         displayFormats: {
-                            second: 'HH:mm:ss'
+                            minute: 'HH:mm'
                         }
-                    }
+                    },
+                    min: getMinTimeForDisplay(),
+                    max: getMaxTimeForDisplay()
                 },
                 y: {
                     beginAtZero: true
