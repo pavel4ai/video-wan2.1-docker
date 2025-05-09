@@ -2,16 +2,24 @@ let metricsIntervalId = null;
 let charts = {};
 
 function createOrUpdateChart(ctx, chartId, labels, datasets) {
-    if (charts[chartId]) {
-        charts[chartId].data.labels = labels;
-        charts[chartId].data.datasets.forEach((dataset, index) => {
-            if (datasets[index]) {
-                dataset.data = datasets[index].data;
-            }
-        });
-        charts[chartId].update('none');
-    } else {
-        charts[chartId] = new Chart(ctx, {
+    console.log(`Creating/updating chart: ${chartId}`);
+    console.log(`- Labels count: ${labels.length}`);
+    console.log(`- Datasets count: ${datasets.length}`);
+    
+    try {
+        if (charts[chartId]) {
+            console.log(`Updating existing chart: ${chartId}`);
+            charts[chartId].data.labels = labels;
+            charts[chartId].data.datasets.forEach((dataset, index) => {
+                if (datasets[index]) {
+                    dataset.data = datasets[index].data;
+                }
+            });
+            charts[chartId].update('none');
+            console.log(`Chart ${chartId} updated successfully`);
+        } else {
+            console.log(`Creating new chart: ${chartId}`);
+            charts[chartId] = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: labels,
@@ -60,8 +68,10 @@ function stopMetricsPolling(message = 'Polling stopped.') {
 }
 
 function updateMetricsDisplay() {
+    console.log('Starting metrics update...');
     fetch('/api/metrics')
         .then(response => {
+            console.log('Fetch response status:', response.status);
             if (!response.ok) {
                 if (response.status === 404) {
                     console.log('Metrics endpoint returned 404, assuming test ended.');
@@ -74,7 +84,22 @@ function updateMetricsDisplay() {
             return response.json();
         })
         .then(metrics => {
-            if (!metrics) return;
+            if (!metrics) {
+                console.log('No metrics data received');
+                return;
+            }
+            console.log('Received metrics data structure:', Object.keys(metrics));
+            console.log('CPU data present:', !!metrics.cpu);
+            console.log('Memory data present:', !!metrics.memory);
+            console.log('Disk data present:', !!metrics.disk);
+            console.log('GPU data present:', !!metrics.gpu);
+            
+            if (metrics.cpu) console.log('CPU data keys:', Object.keys(metrics.cpu));
+            if (metrics.memory) console.log('Memory data keys:', Object.keys(metrics.memory));
+            if (metrics.disk) console.log('Disk data keys:', Object.keys(metrics.disk));
+            if (metrics.gpu) console.log('GPU data length:', metrics.gpu.length);
+            
+            // Full metrics for debugging
             console.log('Received metrics:', JSON.stringify(metrics, null, 2));
 
             // Destroy all Chart.js instances before removing canvases
@@ -97,46 +122,99 @@ function updateMetricsDisplay() {
             }
 
             if (metrics.cpu && metrics.cpu.data) {
+                console.log('Processing CPU chart data...');
+                console.log('CPU data fields:', Object.keys(metrics.cpu.data));
+                
                 const chartId = 'cpuChart';
                 let canvas = document.getElementById(chartId);
                 if (!canvas) {
+                    console.log('Creating CPU canvas element...');
                     metricsDiv.innerHTML += `<div class="chart-container"><h5>CPU Usage (%)</h5><canvas id="${chartId}"></canvas></div>`;
                     canvas = document.getElementById(chartId);
+                    console.log('CPU canvas created:', !!canvas);
                 }
-                const datasets = [
-                    { label: '%user', data: metrics.cpu.data['user'] || [], borderColor: 'blue', tension: 0.1 },
-                    { label: '%system', data: metrics.cpu.data['system'] || [], borderColor: 'red', tension: 0.1 },
-                    { label: '%idle', data: metrics.cpu.data['idle'] || [], borderColor: 'green', tension: 0.1 }
-                ];
-                createOrUpdateChart(canvas.getContext('2d'), chartId, chartLabels, datasets);
+                
+                try {
+                    const datasets = [
+                        { label: '%user', data: metrics.cpu.data['user'] || [], borderColor: 'blue', tension: 0.1 },
+                        { label: '%system', data: metrics.cpu.data['system'] || [], borderColor: 'red', tension: 0.1 },
+                        { label: '%idle', data: metrics.cpu.data['idle'] || [], borderColor: 'green', tension: 0.1 }
+                    ];
+                    console.log('CPU datasets prepared:', datasets.map(d => ({ label: d.label, dataPoints: d.data.length })));
+                    
+                    const ctx = canvas.getContext('2d');
+                    console.log('CPU canvas context:', !!ctx);
+                    createOrUpdateChart(ctx, chartId, chartLabels, datasets);
+                    console.log('CPU chart created/updated');
+                } catch (err) {
+                    console.error('Error creating CPU chart:', err);
+                }
+            } else {
+                console.log('CPU data not available for charting');
             }
 
             if (metrics.memory && metrics.memory.data) {
+                console.log('Processing Memory chart data...');
+                console.log('Memory data fields:', Object.keys(metrics.memory.data));
+                
                 const chartId = 'memoryChart';
                 let canvas = document.getElementById(chartId);
                 if (!canvas) {
+                    console.log('Creating Memory canvas element...');
                     metricsDiv.innerHTML += `<div class="chart-container"><h5>Memory Usage (% Used)</h5><canvas id="${chartId}"></canvas></div>`;
                     canvas = document.getElementById(chartId);
+                    console.log('Memory canvas created:', !!canvas);
                 }
-                const datasets = [
-                    { label: '%memused', data: metrics.memory.data['memused'] || [], borderColor: 'purple', tension: 0.1 }
-                ];
-                createOrUpdateChart(canvas.getContext('2d'), chartId, chartLabels, datasets);
+                
+                try {
+                    const datasets = [
+                        { label: '%memused', data: metrics.memory.data['memused'] || [], borderColor: 'purple', tension: 0.1 }
+                    ];
+                    console.log('Memory datasets prepared:', datasets.map(d => ({ label: d.label, dataPoints: d.data.length })));
+                    
+                    const ctx = canvas.getContext('2d');
+                    console.log('Memory canvas context:', !!ctx);
+                    createOrUpdateChart(ctx, chartId, chartLabels, datasets);
+                    console.log('Memory chart created/updated');
+                } catch (err) {
+                    console.error('Error creating Memory chart:', err);
+                }
+            } else {
+                console.log('Memory data not available for charting');
             }
 
             if (metrics.disk && metrics.disk.data) {
+                console.log('Processing Disk I/O chart data...');
+                console.log('Disk data fields:', Object.keys(metrics.disk.data));
+                
                 const chartId = 'diskChart';
                 const deviceName = metrics.disk.device || 'N/A';
+                console.log('Disk device name:', deviceName);
+                
                 let canvas = document.getElementById(chartId);
                 if (!canvas) {
-                    metricsDiv.innerHTML += `<div class=\"chart-container\"><h5>Disk I/O (kB/s) - ${deviceName}</h5><canvas id=\"${chartId}\"></canvas></div>`;
+                    console.log('Creating Disk canvas element...');
+                    metricsDiv.innerHTML += `<div class="chart-container"><h5>Disk I/O (kB/s) - ${deviceName}</h5><canvas id="${chartId}"></canvas></div>`;
                     canvas = document.getElementById(chartId);
+                    console.log('Disk canvas created:', !!canvas);
                 }
-                const datasets = [
-                    { label: 'Read kB/s', data: metrics.disk.data['rkB_s'] || [], borderColor: 'orange', tension: 0.1 },
-                    { label: 'Write kB/s', data: metrics.disk.data['wkB_s'] || [], borderColor: 'brown', tension: 0.1 }
-                ];
-                createOrUpdateChart(canvas.getContext('2d'), chartId, chartLabels, datasets);
+                
+                try {
+                    const datasets = [
+                        { label: 'Read kB/s', data: metrics.disk.data['rkB_s'] || [], borderColor: 'orange', tension: 0.1 },
+                        { label: 'Write kB/s', data: metrics.disk.data['wkB_s'] || [], borderColor: 'brown', tension: 0.1 }
+                    ];
+                    console.log('Disk datasets prepared:', datasets.map(d => ({ label: d.label, dataPoints: d.data.length })));
+                    
+                    const ctx = canvas.getContext('2d');
+                    console.log('Disk canvas context:', !!ctx);
+                    createOrUpdateChart(ctx, chartId, chartLabels, datasets);
+                    console.log('Disk chart created/updated');
+                } catch (err) {
+                    console.error('Error creating Disk chart:', err);
+                }
+            } else {
+                console.log('Disk data not available for charting');
             }
 
             if (metrics.gpu && Array.isArray(metrics.gpu)) {
@@ -167,6 +245,7 @@ function updateMetricsDisplay() {
                         { label: 'Power [W]', data: gpuData.data['power_draw'] || [], borderColor: 'gold', tension: 0.1 }
                     ];
                     createOrUpdateChart(tempPowerCanvas.getContext('2d'), tempPowerChartId, gpuChartLabels, tempPowerDatasets);
+                    console.log(`Chart ${tempPowerChartId} created successfully`);
                 });
             }
 
