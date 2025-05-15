@@ -116,8 +116,6 @@ def run_video_generation(prompt, test_number):
         stderr = process.stderr.read()
         if stderr:
             logging.error(f"Error in test {test_number}: {stderr}")
-            ErrorHandler.handle_error('process_error', stderr)
-            return 1
         
         # Wait for process to complete
         return_code = process.wait()
@@ -142,7 +140,6 @@ def run_video_generation(prompt, test_number):
     
     except Exception as e:
         logging.error(f"Exception in test {test_number}: {str(e)}")
-        ErrorHandler.handle_error('runtime_error', str(e))
         return 1
 
 def save_test_results(results):
@@ -154,7 +151,6 @@ def save_test_results(results):
         logging.info(f"Test results saved to: {results_file}")
     except Exception as e:
         logging.error(f"Failed to save test results: {e}")
-        ErrorHandler.handle_error('file_error', f"Failed to save test results: {e}")
 
 def run_test_sequence():
     """Run the full test sequence"""
@@ -202,4 +198,3 @@ if __name__ == "__main__":
         logging.info("Test suite completed")
     except Exception as e:
         logging.critical(f"Fatal error in test suite: {str(e)}")
-        ErrorHandler.handle_error('fatal_error', str(e), fatal=True)
