@@ -3,8 +3,6 @@ import time
 import json
 import logging
 import os
-import glob
-import shutil
 from prometheus_client import Gauge, start_http_server
 
 # Configure logging
@@ -48,49 +46,22 @@ def parse_output_metrics(output_line):
     except ValueError as e:
         logging.warning(f"Failed to parse metrics from line: {output_line}, error: {e}")
 
-def move_latest_video(test_number):
-    """Find and move the latest generated video to the proper location"""
-    try:
-        # Find the latest t2v-*.mp4 file
-        video_files = glob.glob(os.path.join(WAN_OUTPUT_DIR, 't2v-*.mp4'))
-        if not video_files:
-            logging.error("No video file found after generation")
-            return None
-        
-        # Get the most recent file
-        latest_video = max(video_files, key=os.path.getctime)
-        logging.info(f"Found video file: {latest_video}")
-        
-        # Create new filename
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        new_filename = f"test_{test_number}_{timestamp}.mp4"
-        new_path = os.path.join(VIDEO_OUTPUT_DIR, new_filename)
-        
-        # Move the file
-        shutil.move(latest_video, new_path)
-        logging.info(f"Video moved to: {new_path}")
-        
-        # Get file size
-        file_size = os.path.getsize(new_path) / (1024 * 1024)  # Convert to MB
-        logging.info(f"Video size: {file_size:.2f} MB")
-        
-        return new_path
-    except Exception as e:
-        logging.error(f"Failed to move video file: {e}")
-        return None
-
 def run_video_generation(prompt, test_number):
     """Run video generation with the given prompt"""
     logging.info(f"Starting video generation for test {test_number}/5")
     logging.info(f"Prompt: {prompt}")
-    
+
+    video_filename = f"test_{test_number}.mp4"
+    save_file_path = os.path.join(VIDEO_OUTPUT_DIR, video_filename)
+  
     cmd = [
         "python",
         "/workspace/Wan2.1/generate.py",
         "--task", "t2v-14B",
         "--size", "832*480",
         "--ckpt_dir", "/workspace/Wan2.1/Wan2.1-T2V-14B",
-        "--prompt", prompt
+        "--prompt", prompt,
+        "--save_file", save_file_path
     ]
     
     start_time = time.time()
@@ -124,17 +95,19 @@ def run_video_generation(prompt, test_number):
         video_generation_duration.set(duration)
         
         if return_code == 0:
-            logging.info(f"Successfully completed video generation for test {test_number}")
+            logging.info(f"Successfully completed video generation script for test {test_number}")
             logging.info(f"Generation time: {duration:.2f} seconds")
             
-            # Move and rename the video file
-            video_path = move_latest_video(test_number)
-            if video_path:
-                logging.info(f"Video available at: {video_path}")
+            # Check if video file was created at the specified path
+            if os.path.exists(save_file_path):
+                logging.info(f"Video available at: {save_file_path}")
+                file_size = os.path.getsize(save_file_path) / (1024 * 1024)  # Convert to MB
+                logging.info(f"Video size: {file_size:.2f} MB")
             else:
-                return 1
+                logging.error(f"Video file {save_file_path} NOT found after generation for test {test_number}, though script exited with 0.")
+                return 1 # Treat as failure if file not found
         else:
-            logging.error(f"Video generation failed for test {test_number} with return code {return_code}")
+            logging.error(f"Video generation script failed for test {test_number} with return code {return_code}")
         
         return return_code
     
