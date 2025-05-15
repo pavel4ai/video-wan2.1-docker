@@ -26,8 +26,8 @@ video_generation_duration = Gauge('video_generation_duration_seconds', 'Time tak
 
 # Constants
 VIDEO_OUTPUT_DIR = '/workspace/data/videos'
-WAN_OUTPUT_DIR = '/workspace/Wan2.1'
-os.makedirs(VIDEO_OUTPUT_DIR, exist_ok=True)
+WAN_OUTPUT_DIR = '/workspace/'
+
 
 # Test prompts
 PROMPTS = [
